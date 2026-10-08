@@ -37,6 +37,7 @@ button{font:inherit;color:inherit}
 .logo small{display:block;font-size:10px;letter-spacing:.3em;color:var(--spark)}
 .topstat{font-size:13px;color:var(--dim);text-align:right;font-variant-numeric:tabular-nums}
 .topstat b{color:var(--gold);font-weight:400}
+.topstat .tjob{font-size:12px;color:#cfe8ff}
 
 .stage{position:relative;aspect-ratio:5/3;width:100%;max-width:100%;overflow:hidden;padding:0}
 #cv{touch-action:none;display:block;width:100%;height:100%;image-rendering:pixelated;image-rendering:crisp-edges;border-radius:5px}
@@ -2680,7 +2681,8 @@ function draw(){
 
 /* ---------- UI rendering ---------- */
 function renderTop(){
-  $('#topStat').innerHTML = `${S.cleared ? '<b>★</b> ' : ''}ゆうしゃ Lv${S.hero.lv}<br><b>${S.gold.toLocaleString()} G</b>`;
+  const jl = jobLv(S.job);
+  $('#topStat').innerHTML = `${S.cleared ? '<b>★</b> ' : ''}ゆうしゃ Lv${S.hero.lv}<br><span class="tjob">${JOBS[S.job].n} ${jl >= JOB_MAX ? '★マスター' : 'Lv' + jl}</span><br><b>${S.gold.toLocaleString()} G</b>`;
 }
 function partyRows(){
   if (mode === 'battle' && R) return R.actors;
