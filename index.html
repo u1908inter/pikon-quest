@@ -2241,7 +2241,7 @@ function tryCommand(seq){
   if (!front()) return true;
   R.cmdCd[k] = CMDS[k].cd;
   const hs = R.hs, atk = hs.atk * (R.buff > 0 ? 1.5 : 1);
-  const fresh = !S.cmdKnown[k]; S.cmdKnown[k] = true;
+  const fresh = !S.cmdKnown[k]; S.cmdKnown[k] = true; track('cmd-' + k, 'かくし技：' + CMDS[k].n);
   flash(0.6, '#e8d8ff'); se('cmd'); R.shake = 0.3;
   banner(`${fresh ? 'かくし技を みつけた！' : ''}<b>${CMDS[k].n}</b>`, 'spark', 1400);
   log(`ゆうしゃの ${CMDS[k].n}！`);
