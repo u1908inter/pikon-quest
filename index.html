@@ -37,6 +37,9 @@ button{font:inherit;color:inherit}
 .logo small{display:block;font-size:10px;letter-spacing:.3em;color:var(--spark)}
 .topstat{font-size:13px;color:var(--dim);text-align:right;font-variant-numeric:tabular-nums}
 .topstat b{color:var(--gold);font-weight:400}
+.refups{display:flex;flex-direction:column;gap:4px}
+.refup{display:grid;grid-template-columns:5em 1fr auto;gap:8px;align-items:baseline;font-size:15px}
+.refup b{color:var(--gold);font-weight:400}
 .topstat .tjob{font-size:12px;color:#cfe8ff}
 
 .stage{position:relative;aspect-ratio:5/3;width:100%;max-width:100%;overflow:hidden;padding:0}
@@ -75,6 +78,8 @@ button{font:inherit;color:inherit}
 .num{font-variant-numeric:tabular-nums}
 
 .skills{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
+.skills > :nth-child(5):last-child{grid-column:1/-1}
+.slots4 > :nth-child(5):last-child{grid-column:1/-1}
 .sk{position:relative;text-align:left;padding:7px 10px 8px;min-height:66px;cursor:pointer;overflow:hidden;touch-action:manipulation}
 .sk:active{transform:translateY(1px)}
 .sk .cd{position:absolute;left:0;right:0;bottom:0;background:rgba(243,241,234,.18);pointer-events:none}
@@ -180,6 +185,9 @@ button{font:inherit;color:inherit}
 .slot{border:1px solid #3a3c46;border-radius:5px;padding:6px 8px;cursor:pointer;background:transparent;text-align:left;min-width:0}
 .slot.sel{border-color:var(--gold);box-shadow:inset 0 0 0 1px var(--gold)}
 .slot small{display:block;color:var(--dim);font-size:10px}
+.slot .sd{display:block;font-size:11px;color:var(--dim);line-height:1.45;margin-top:3px;white-space:normal}
+.slot .sd .st{font-size:10px}
+.slots4 .slot{display:flex;flex-direction:column;justify-content:flex-start}
 .tag{font-size:10px;border:1px solid currentColor;border-radius:3px;padding:0 4px;margin-left:4px;white-space:nowrap}
 .toggle{display:flex;justify-content:space-between;align-items:center;gap:10px}
 input[type=range]{width:100%;accent-color:#ffd84a}
@@ -682,11 +690,95 @@ const JOBS = {
     A('倉庫番',       'spc', '持ち物の 上限 +40',                   s => s.pw.storage = true),
     A('富豪',         'spc', 'ゴールド +80%、カードの 売値 2倍',      s => { s.gold += 80; s.pw.cardSell2 = true; }),
     A('札束の威光',   'atk', '攻撃力 +（所持金の 桁数×4）%　例：1万Gで +20%、100万Gで +28%（お金は 減らない）', s => { s.atkPct += 4 * String(Math.max(1, Math.floor(S.gold))).length; })]},
+  asobi:  {n:'遊び人',   col:'#e86ab0', d:'気まぐれ', abyss:true, base:'経験値 +20%', bfx:s => { s.exp += 20; },
+    unlock:() => S.maxFloor >= 100, hint:'深淵の 奥で めざめる', ab:[
+    A('あそぶ',       'spc', '経験値 +15%',                        s => s.exp += 15),
+    A('くちぶえ',     'spc', 'レアモンスターの 出現率 2倍',          s => s.pw.rarex2 = true),
+    A('さいころ',     'atk', '技ダメージが 毎回 0.6倍か 1.8倍（運しだい）', s => s.pw.dice = true),
+    A('ねる',         'def', 'ウェーブ間の 回復 +15%',              s => add(s.pw, 'healPlus', 0.15)),
+    A('おどける',     'def', '敵の攻撃を 10%で かわす',             s => add(s.pw, 'evade', 10)),
+    A('なげキッス',   'spc', '起き上がり率 1.5倍',                  s => s.pw.call = true),
+    A('ギャンブル',   'spc', 'ゴールド +50%',                      s => s.gold += 50),
+    A('まぐれ',       'atk', '会心率 +15%',                        s => s.crit += 15),
+    A('ひらめき体質', 'spc', 'ひらめき率 +50%',                     s => s.spark += 50),
+    A('悟り',         'spc', '熟練度と JPの 伸び +30%（きわめた先に 何かが ある…）', s => s.pw.timeSand = true)]},
+  kenja:  {n:'賢者',     col:'#eef0ff', d:'魔法と 祈りの 頂点', abyss:true, hidden:true, base:'技ダメージ +20%、最大HP +10%', bfx:s => { s.skill += 20; s.hpPct += 10; },
+    unlock:() => jobLv('asobi') >= JOB_MAX, hint:'遊び人を マスター', ab:[
+    A('賢者の知恵',   'atk', '技ダメージ +20%',                     s => s.skill += 20),
+    A('ベホマ',       'def', 'ウェーブ間の 回復 +30%',              s => add(s.pw, 'healPlus', 0.3)),
+    A('イオナズン',   'atk', '全体技の ダメージ +50%',              s => s.pw.flare = true),
+    A('マホカンタ',   'def', '受けた ダメージの 30%を はね返す',     s => add(s.pw, 'reflect', 30)),
+    A('早詠み',       'spc', '技の再使用 -20%',                     s => s.cdr += 20),
+    A('ザオリク',     'def', '倒れた仲間が ウェーブ終了時に 全快で 復活', s => { s.pw.raise = true; s.pw.arise = true; }),
+    A('天啓',         'spc', 'ひらめき率 +60%',                     s => s.spark += 60),
+    A('魔力の泉',     'spc', '熟練度の伸び 2倍',                    s => s.pw.mastery2 = true),
+    A('連続呪文',     'spc', '技を使うと 30%で もう一度 発動',      s => add(s.pw, 'dualcast', 30)),
+    A('大賢者',       'atk', '技ダメージ +50%、会心率 +10%',         s => { s.skill += 50; s.crit += 10; })]},
+  mamono: {n:'魔物使い', col:'#9a5a2a', d:'魔物と 心を かよわせる', abyss:true, base:'仲間の 攻撃力・最大HP +15%', bfx:s => { add(s.pw, 'allyAtkPct', 15); add(s.pw, 'allyHpPct', 15); },
+    unlock:() => S.maxFloor >= 150, hint:'深淵の 奥で めざめる', ab:[
+    A('なつかせる',   'spc', '起き上がり率 1.5倍',                  s => s.pw.call = true),
+    A('えさやり',     'def', '仲間の 最大HP +20%',                  s => add(s.pw, 'allyHpPct', 20)),
+    A('けしかける',   'atk', '仲間の 攻撃力 +20%',                  s => add(s.pw, 'allyAtkPct', 20)),
+    A('むちさばき',   'atk', '攻撃力 +10%、会心率 +5%',             s => { s.atkPct += 10; s.crit += 5; }),
+    A('群れの守り',   'def', '仲間が 受けるダメージ -20%',          s => add(s.pw, 'allyGuard', 20)),
+    A('野生のリズム', 'spc', '仲間の 攻撃速度 +20%',                s => add(s.pw, 'allyAspd', 20)),
+    A('魔物の心',     'spc', '起き上がり率 2倍',                    s => s.pw.tame = true),
+    A('安全な合体',   'spc', '合体事故が 起きない',                  s => s.pw.fuseSafe = true),
+    A('あぶない合体', 'spc', '合体事故が 4倍 起きやすい（「安全な合体」が 優先）', s => s.pw.fuseWild = true),
+    A('魔物王',       'spc', '仲間の 攻撃力・最大HP +40%、仲間の 技の再使用 -20%', s => { add(s.pw, 'allyAtkPct', 40); add(s.pw, 'allyHpPct', 40); add(s.pw, 'allyCdPct', 20); })]},
+  ninja:  {n:'忍者',     col:'#4a4a6a', d:'かくし技と 影の技', abyss:true, base:'攻撃速度 +15%、会心率 +5%', bfx:s => { s.aspd += 15; s.crit += 5; },
+    unlock:() => S.maxFloor >= 250, hint:'深淵の 奥で めざめる', ab:[
+    A('しのび',       'def', '敵の攻撃を 10%で かわす',             s => add(s.pw, 'evade', 10)),
+    A('手裏剣',       'atk', '攻撃速度 +15%',                      s => s.aspd += 15),
+    A('秘伝の書',     'atk', 'かくし技の ダメージ +50%',            s => add(s.pw, 'cmdDmg', 50)),
+    A('変わり身',     'def', '敵の攻撃を さらに 15%で かわす',       s => add(s.pw, 'evade', 15)),
+    A('早九字',       'spc', 'かくし技の 再使用 -30%',              s => add(s.pw, 'cmdCd', 30)),
+    A('影しばり',     'atk', '技が当たった敵を 少し 足止め',         s => s.pw.chill = true),
+    A('分身の術',     'atk', 'かくし技を 40%で もう一度 放つ',       s => add(s.pw, 'cmdTwice', 40)),
+    A('二刀流',       'atk', '通常攻撃が 2回攻撃',                  s => s.pw.double = true),
+    A('奥義書',       'atk', 'かくし技の ダメージ さらに +100%',     s => add(s.pw, 'cmdDmg', 100)),
+    A('影の極意',     'atk', '会心率 +20%、会心の一撃 2.2倍',        s => { s.crit += 20; s.pw.critMul = Math.max(s.pw.critMul || 1.8, 2.2); })]},
+  odori:  {n:'踊り子',   col:'#e8506a', d:'舞で 流れを つくる', abyss:true, base:'攻撃速度 +10%、技の再使用 -5%', bfx:s => { s.aspd += 10; s.cdr += 5; },
+    unlock:() => S.maxFloor >= 350, hint:'深淵の 奥で めざめる', ab:[
+    A('ステップ',     'def', '敵の攻撃を 10%で かわす',             s => add(s.pw, 'evade', 10)),
+    A('剣の舞',       'atk', '攻撃力 +15%',                        s => s.atkPct += 15),
+    A('自動の舞',     'spc', 'AUTOの 技も 威力が 落ちない',          s => s.pw.danceDmg = true),
+    A('祈りの舞',     'def', 'ウェーブ間の 回復 +20%',              s => add(s.pw, 'healPlus', 0.2)),
+    A('流れる舞',     'spc', 'AUTOの 技も 再使用が のびない',        s => s.pw.danceCd = true),
+    A('みかわしの舞', 'def', '敵の攻撃を さらに 10%で かわす',       s => add(s.pw, 'evade', 10)),
+    A('魅惑の舞',     'spc', '敵の 攻撃間隔 +20%',                  s => s.pw.slow = true),
+    A('情熱の舞',     'spc', '仲間の 攻撃速度 +25%',                s => add(s.pw, 'allyAspd', 25)),
+    A('円舞曲',       'spc', '技の再使用 -15%',                     s => s.cdr += 15),
+    A('千の舞',       'atk', '攻撃速度 +30%、技ダメージ +20%',       s => { s.aspd += 30; s.skill += 20; })]},
+  samurai:{n:'侍',       col:'#a83a3a', d:'居合と 会心', abyss:true, base:'会心率 +10%、攻撃力 +5%', bfx:s => { s.crit += 10; s.atkPct += 5; },
+    unlock:() => S.maxFloor >= 450, hint:'深淵の 奥で めざめる', ab:[
+    A('居合',         'atk', '会心率 +10%',                        s => s.crit += 10),
+    A('武士道',       'def', '防御力 +15%',                        s => s.defPct += 15),
+    A('剣気',         'atk', '剣の技ダメージ +30%',                 s => add(s.pw, 'swordDmg', 30)),
+    A('見切り',       'def', '敵の攻撃を 15%で かわす',             s => add(s.pw, 'evade', 15)),
+    A('白刃',         'atk', '会心の一撃 2.5倍',                    s => s.pw.critMul = Math.max(s.pw.critMul || 1.8, 2.5)),
+    A('不動',         'def', 'ウェーブに1回だけ HP1で 耐える',      s => s.pw.endure = true),
+    A('一閃',         'atk', '通常攻撃が 手前2体に 当たる',          s => s.pw.cleave = true),
+    A('斬鉄剣',       'atk', '技の会心で 10%の確率で 敵を 一撃で 倒す（ボス以外）', s => s.pw.zantetsu = true),
+    A('明鏡止水',     'spc', '技の再使用 -15%',                     s => s.cdr += 15),
+    A('剣豪',         'atk', '攻撃力 +25%、会心率 +15%',             s => { s.atkPct += 25; s.crit += 15; })]},
+  abyssk: {n:'深淵の騎士', col:'#5a2a7a', d:'深淵の 力を まとう', abyss:true, base:'攻撃力 +25%、最大HP -10%', bfx:s => { s.atkPct += 25; s.hpPct -= 10; },
+    unlock:() => S.maxFloor >= 550, hint:'深淵の 奥で めざめる', ab:[
+    A('深淵の剣',     'atk', '攻撃力 +15%',                        s => s.atkPct += 15),
+    A('血の契約',     'atk', '攻撃力 +40%、最大HP -20%',             s => { s.atkPct += 40; s.hpPct -= 20; }),
+    A('闇の衣',       'def', '受けるダメージ -15%',                  s => add(s.pw, 'dmgCut', 15)),
+    A('吸命',         'def', '与えたダメージの 5% HP吸収',           s => add(s.pw, 'ls', 5)),
+    A('深淵の加護',   'def', '最大HP +30%',                        s => s.hpPct += 30),
+    A('ボス狩り',     'atk', 'ボスへの ダメージ +50%',               s => add(s.pw, 'bossDmg', 50)),
+    A('闇の波動',     'atk', '全体技の ダメージ +50%',              s => s.pw.flare = true),
+    A('不死身',       'def', '勇者が 倒れたとき 出撃中1回 HP50%で 復活', s => s.pw.reraise = true),
+    A('深淵の目',     'spc', 'ひらめき率 +40%、熟練度の伸び 1.3倍',  s => { s.spark += 40; s.pw.mast13 = true; }),
+    A('深淵の王',     'atk', '攻撃力 +50%、技ダメージ +30%、受けるダメージ -10%', s => { s.atkPct += 50; s.skill += 30; add(s.pw, 'dmgCut', 10); })]},
   suppin: {n:'すっぴん', col:'#d8d4c8', d:'すべてを 極めた者', base:'基本能力 +20%、マスター枠 2倍', special:true,
     bfx:s => { s.hpPct += 20; s.atkPct += 20; s.defPct += 20; },
     unlock:() => MAIN_JOBS.every(k => jobLv(k) >= JOB_MAX), hint:'12ジョブ すべてを マスター', ab:[]},
 };
-const MAIN_JOBS = Object.keys(JOBS).filter(k => !JOBS[k].special);
+const MAIN_JOBS = Object.keys(JOBS).filter(k => !JOBS[k].special && !JOBS[k].abyss);   // the 12 original jobs (すっぴん and 深淵 jobs are extra)
 const jobUnlocked = k => !JOBS[k].unlock || JOBS[k].unlock();
 for (const j in JOBS) JOBS[j].ab.forEach((a, i) => a.lv = i + 1);
 /* abilities that left a job but may still sit in a master slot from an old save */
@@ -730,10 +822,11 @@ const MATS = {
 const AREA_MAT = ['iron', 'leaf', 'mithril', 'crystal'];
 const TIER_ILV = [3, 6, 9, 12];
 /* Refining (RO style): +1..+10. +5 and up can fail, and a failure destroys the item. */
-const REF_RATE = [1, 1, 1, 1, 0.8, 0.6, 0.45, 0.3, 0.2, 0.1];   // chance to go from +n to +n+1
+const REF_RATE = [1, 1, 1, 1, 0.8, 0.6, 0.45, 0.3, 0.2, 0.1, 0.05];   // +10→+11 needs the F150 unlock   // chance to go from +n to +n+1
 /* base-stat multiplier per refine level: +10% steps to +6, then a steep climb to x10 at +10 */
-const REF_MUL = [1, 1.1, 1.2, 1.3, 1.4, 1.5, 1.6, 2.5, 4, 6.3, 10];
-const refMul = it => REF_MUL[Math.min(10, it.ref || 0)];
+const REF_MUL = [1, 1.1, 1.2, 1.3, 1.4, 1.5, 1.6, 2.5, 4, 6.3, 10, 15];
+const refMul = it => REF_MUL[Math.min(11, it.ref || 0)];
+const refCap = () => (S.maxFloor || 0) >= 400 ? 11 : 10;
 const refRate = r => Math.min(1, REF_RATE[r] + (curPw().smith ? 0.05 : 0));
 const refCost = it => Math.round(40 * it.ilv * Math.pow(1.7, it.ref || 0) * (it.rar >= 3 ? 1.5 : 1));
 const refName = it => { it.name = (it.ref ? `+${it.ref} ` : '') + it.name.replace(/^\+\d+ /, ''); };
@@ -750,7 +843,8 @@ const facLv = k => (S.fac && S.fac[k]) || 0;
 let pwCache = {t:-1e9, v:{}};
 const curPw = () => { const now = performance.now(); if (now - pwCache.t > 250){ pwCache = {t:now, v:(R && R.hs ? R.hs : heroStats()).pw}; } return pwCache.v; };
 const SPEEDS = [1, 2, 4, 8, 16];
-const maxSpeed = () => SPEEDS[facLv('clock')];
+const x32ok = () => (S.maxFloor || 0) >= 200 || !!(S.dbg && S.dbg.x32);   // ×32: the F200 深淵 unlock (or the debug switch)
+const maxSpeed = () => x32ok() ? 32 : SPEEDS[facLv('clock')];
 const invMax = () => 80 + 20 * facLv('bag') + (curPw().storage ? 40 : 0);
 const stallMax = () => 5 + 2 * facLv('stall');
 const partySize = () => 3 + facLv('party');
@@ -986,7 +1080,7 @@ function freshSave(){
     hero:{lv:1, exp:0},
     skills:{slash:{m:0}, kick:{m:0}},
     slots:['slash','kick',null,null],
-    auto:[false,false,false,false],
+    auto:[false,false,false,false], abyssSeen:0,
     allies:[], party:[null,null,null],
     equip:{weapon:null, head:null, body:null, hands:null, feet:null, acc:null, acc2:null},
     inv:[], cards:{}, album:{}, boxes:0,
@@ -1055,6 +1149,27 @@ function activeAbNames(){
   for (const c of slotKeys()){ const v = S.mslots[c]; if (v && v.startsWith('ab:')){ const r = abRef(v); if (r && jobLv(r.j) >= JOB_MAX) set.add(r.a.n); } }
   return set;
 }
+/* ---------- 深淵の証: every 50 floors from F100 — a title, a permanent stat bonus, and an unlock up to F250 ---------- */
+const ABYSS_ROMAN = ['Ⅰ', 'Ⅱ', 'Ⅲ', 'Ⅳ', 'Ⅴ', 'Ⅵ', 'Ⅶ', 'Ⅷ', 'Ⅸ', 'Ⅹ'];
+const ABYSS_BONUS = 5;   // % to hero HP / attack / defense per title
+const abyssLv = () => Math.max(0, Math.floor((S.maxFloor || 0) / 50) - 1);   // F100 → 1, F150 → 2, …
+const abyssTitle = n => n <= 0 ? '' : '深淵の証' + (n <= ABYSS_ROMAN.length ? ABYSS_ROMAN[n - 1] : n);
+const UNLOCKS = [
+  {f:100, k:'asobi',  n:'新ジョブ「遊び人」', d:'気まぐれな ジョブ「遊び人」が 解放された。ジョブ画面で えらべる。きわめると… 何かが 起きるかも。'},
+  {f:150, k:'mamono', n:'新ジョブ「魔物使い」', d:'仲間を 強くし、起き上がり率や 合体事故を あやつる ジョブ。仲間で 戦いたい人に。'},
+  {f:200, k:'x32',    n:'バトル速度 ×32', d:'速度ボタンで ×32 を えらべる（時計塔の レベルに 関係なく）。'},
+  {f:250, k:'ninja',  n:'新ジョブ「忍者」', d:'かくし技を きたえる ジョブ。かくし技の 威力アップ・再使用短縮・分身で もう一度。'},
+  {f:300, k:'slot5',  n:'技の枠 5つ目', d:'技を 5つまで セットできる。バトル画面にも 5つ目の 技ボタンが ふえる。技タブで 枠5に 技を 入れよう。'},
+  {f:350, k:'odori',  n:'新ジョブ「踊り子」', d:'AUTOで 使う技の 弱体化を なくせる ジョブ。放置ぎみに 遊ぶ人に。'},
+  {f:400, k:'ref11',  n:'精錬 +11', d:'精錬所で +11 まで きたえられる。+10 → +11 で 基本性能は ×10 → ×15。成功率は 5%、失敗すると こわれる。'},
+  {f:450, k:'samurai',n:'新ジョブ「侍」', d:'会心に 特化した ジョブ。技の会心で ボス以外を 一撃で 斬ることも。'},
+  {f:500, k:'q4',     n:'深層装備 ★4', d:'深層装備の 品質の 上限が 上がり、最高品質 ★★★★ が 出るように なる。工房の 作り直しでも ねらえる。'},
+  {f:550, k:'abyssk', n:'新ジョブ「深淵の騎士」', d:'HPを 削って 攻撃力を 大きく 上げる、深淵の ジョブ。'},
+  {f:600, k:'slot6',  n:'技の枠 6つ目', d:'技を 6つまで セットできる。'},
+];
+const unlocked = k => (S.maxFloor || 0) >= UNLOCKS.find(u => u.k === k).f;
+const nSlots = () => 4 + (unlocked('slot5') ? 1 : 0) + (unlocked('slot6') ? 1 : 0);
+function fitSlots(){ while (S.slots.length < nSlots()) S.slots.push(null); while (S.auto.length < nSlots()) S.auto.push(false); }
 function heroStats(){
   const L = S.hero.lv;
   const s = {hp:60 + 14*(L-1), atk:8 + 2.6*(L-1), def:3 + 1.2*(L-1), crit:5, aspd:0, skill:0, cdr:0, spark:0, exp:0, gold:0,
@@ -1101,6 +1216,7 @@ function heroStats(){
   if (s.pw.shippu) s.cdr += 25;
   const reg = Object.keys(S.album).length;
   s.hpPct += reg; s.atkPct += reg;
+  const ab = abyssLv() * ABYSS_BONUS; s.hpPct += ab; s.atkPct += ab; s.defPct += ab;
   if (reg >= Object.keys(CARDS).length) s.spark += 20;
   s.hp *= 1 + s.hpPct / 100; s.atk *= 1 + s.atkPct / 100; s.def *= 1 + s.defPct / 100;
   s.cdr = Math.min(s.cdr, s.pw.shippu ? 60 : 40); s.crit = Math.min(s.crit, 75);
@@ -1211,9 +1327,9 @@ function genItem(f, boss, noNormal, opt = {}){
 }
 /* ---- 深層 (deep) gear, F51+ ---- */
 const deepChance = f => Math.min(0.4, 0.15 + (f - CLEAR_FLOOR) * 0.005);
-const QSTAR = q => q < 0.9 ? 1 : q < 1.4 ? 2 : 3;
-const qStars = q => '★'.repeat(QSTAR(q)) + '☆'.repeat(3 - QSTAR(q));
-function deepAff(k, ilv){ const q = rnd(0.5, 2.0); return {k, v: Math.max(1, Math.round(affVal(k, ilv) * q)), q}; }
+const QSTAR = q => q < 0.9 ? 1 : q < 1.4 ? 2 : q < 2.05 ? 3 : 4;   // ★4 only exists after the F500 unlock
+const qStars = q => '★'.repeat(QSTAR(q)) + '☆'.repeat(Math.max(0, 3 - QSTAR(q)));
+function deepAff(k, ilv){ const q = rnd(0.5, (S.maxFloor || 0) >= 500 ? 2.6 : 2.0); return {k, v: Math.max(1, Math.round(affVal(k, ilv) * q)), q}; }
 const DEEP_AFF = {
   horde:{n:'群れ殺し', roll:() => ri(1, 3), d:v => `画面の 敵1体ごとに 与えるダメージ +${v}%`},
   blast:{n:'連鎖爆発', roll:() => ri(30, 80), d:v => `敵を 倒すと 周りの敵に 攻撃力の ${v}% の 爆発`},
@@ -1636,7 +1752,7 @@ function bgmTick(ahead){
   const sg = SONGS[AU.song], C = compileSong(sg), st = 60 / sg.bpm / 4, P = BGM_LEADS[sg.lead], ps = AU.pos;
   const H = BGM_LEADS[sg.lead === 'flute' ? 'soft' : 'flute'], O = BGM_LEADS.low;
   if (AU.dly) AU.dly.delayTime.value = Math.min(0.9, st * 3);
-  if (AU.next < AU.ctx.currentTime - 0.2) AU.next = AU.ctx.currentTime + 0.02;
+  if (AU.next < AU.ctx.currentTime + 0.01) AU.next = AU.ctx.currentTime + 0.03;   // never schedule in the past (humanised timing can shift a note a few ms earlier)
   while (AU.next < AU.ctx.currentTime + ahead){
     const s = C.sec[C.order[ps.si]], ch = s.chords[ps.bar], t = AU.next, step = ps.bar * 16 + ps.j, j = ps.j, vol = s.vol;
     const lastBar = ps.bar === s.bars - 1, phraseEnd = ps.bar % 4 === 3;
@@ -1765,7 +1881,7 @@ function makeAllyActor(al, i, hs = heroStats()){
 function startRun(f){
   auInit(); track('start', 'はじめて出撃');
   R = {floor:f, wave:0, waves:5, isBoss:false, enemies:[], actors:buildActors(), phase:'march', marchT:1.0, endT:0,
-       scroll:0, cds:[0,0,0,0], buff:0, freeze:0, shake:0, paused:false, pending:null, hs:heroStats(),
+       scroll:0, cds:[0,0,0,0,0,0], buff:0, freeze:0, shake:0, paused:false, pending:null, hs:heroStats(),
        loot:{kills:0, exp:0, gold:0, items:0, rares:0, recruits:0, sparks:0, floors:0, cards:0, boxes:0}};
   R.charm = {}; S.charmNext = {};   // charm shop removed
   R.hs = heroStats(); R.actors = buildActors();
@@ -1830,7 +1946,7 @@ function update(dt){
   updFx(dt);
   if (R.shake > 0) R.shake -= dt;
   if (R.buff > 0) R.buff -= dt;
-  for (let i = 0; i < 4; i++) if (R.cds[i] > 0) R.cds[i] -= dt;
+  for (let i = 0; i < nSlots(); i++) if (R.cds[i] > 0) R.cds[i] -= dt;
   if (R.stealCd > 0) R.stealCd -= dt;
   if (R.cmdCd) for (const k in R.cmdCd) if (R.cmdCd[k] > 0) R.cmdCd[k] -= dt;
   switch (R.phase){
@@ -1894,7 +2010,7 @@ function fight(dt){
     }
     if (!R || R.phase !== 'fight') return;
   }
-  if (!R.actors[0].dead) for (let i = 0; i < 4; i++) if (S.auto[i]) useSkill(i, false);
+  if (!R.actors[0].dead) for (let i = 0; i < nSlots(); i++) if (S.auto[i]) useSkill(i, false);
   if (S.stealAuto && R && R.hs.pw.steal) trySteal(false);
 }
 
@@ -2061,8 +2177,8 @@ function killEnemy(e){
   for (let i = 0; i < drops; i++) gainItem(genItem(f, e.boss), e);
   if (e.boss) $('#bossbar').hidden = true;
   if (hs.pw.kyukon) healActor(R.actors[0], R.actors[0].max * 0.03);
-  if (hs.pw.tamashii) for (let i = 0; i < 4; i++) if (R.cds[i] > 0) R.cds[i] = Math.max(0, R.cds[i] - 0.3);
-  if (hs.pw.quick) for (let i = 0; i < 4; i++) if (R.cds[i] > 0) R.cds[i] = Math.max(0, R.cds[i] - hs.pw.quick);
+  if (hs.pw.tamashii) for (let i = 0; i < nSlots(); i++) if (R.cds[i] > 0) R.cds[i] = Math.max(0, R.cds[i] - 0.3);
+  if (hs.pw.quick) for (let i = 0; i < nSlots(); i++) if (R.cds[i] > 0) R.cds[i] = Math.max(0, R.cds[i] - hs.pw.quick);
   if (hs.pw.blast && !R.blasting){   // chain explosion (one generation only)
     R.blasting = true; burst(e.x, e.y - 6, '#ff9a3a', 8, 35);
     for (const t of R.enemies) if (!t.dead && t !== e && Math.abs(t.x - e.x) < 22) hurtEnemy(t, hs.atk * hs.pw.blast / 100, {col:'#ff9a3a', hero:true});
@@ -2232,6 +2348,39 @@ function doReforge(it, i){
   S.craft.m = Math.min(999, S.craft.m + 2); save();
   return {old, nw};
 }
+/* one refine attempt; the result window offers the next step on the same item so a run of refines needs no re-selecting */
+function doRefine(it){
+  const r = it.ref || 0, rate = refRate(r), cost = refCost(it);
+  if (r >= refCap() || S.gold < cost) return;
+  S.gold -= cost; S.stats2.refines++;
+  se('anvil');
+  const worn = EQ.some(k => S.equip[k] === it), hs0 = worn ? heroStats() : null, m0 = refMul(it);
+  if (Math.random() < rate){
+    it.ref = r + 1; refName(it); save();
+    // what this step changed: the item's base numbers, and the hero's totals when it is worn
+    const m1 = refMul(it), up = [['atk', '攻撃力'], ['def', '防御力'], ['hp', 'HP']].filter(([k]) => it.base[k]).map(([k, n]) => {
+      const a = Math.round(it.base[k] * m0), b2 = Math.round(it.base[k] * m1);
+      return `<div class="refup"><span>${n}</span><span class="num">${a.toLocaleString()} → <b>${b2.toLocaleString()}</b></span><span class="r2 num">+${(b2 - a).toLocaleString()}</span></div>`; }).join('');
+    let heroUp = '';
+    if (hs0){ const hs1 = heroStats(), d = [['atk', '攻撃力'], ['def', '防御力'], ['hp', '最大HP']].filter(([k]) => Math.round(hs1[k]) !== Math.round(hs0[k]))
+      .map(([k, n]) => `${n} ${Math.round(hs0[k]).toLocaleString()} → ${Math.round(hs1[k]).toLocaleString()}（+${Math.round(hs1[k] - hs0[k]).toLocaleString()}）`);
+      if (d.length) heroUp = `<p class="hint">ゆうしゃ：${d.join(' ／ ')}</p>`; }
+    setTimeout(() => { se(it.ref >= 7 ? 'clear' : 'stage'); }, 350);
+    let next = '';
+    if (it.ref < refCap()){
+      const nr = refRate(it.ref), nc = refCost(it), ok = S.gold >= nc, risky = nr < 1;
+      next = `<p class="hint">つぎ：+${it.ref} → +${it.ref + 1}（×${REF_MUL[it.ref]} → ×${REF_MUL[it.ref + 1]}）／ 成功率 <span style="${risky ? 'color:#ffb0a6' : ''}">${Math.round(nr * 100)}%</span> ／ ${nc}G${risky ? '<br><span style="color:#ffb0a6">失敗すると こわれる</span>' : ''}${ok ? '' : '<br>ゴールドが たりない'}</p>`;
+      next += `<div class="opts"><button class="btn" data-m="close">やめる</button><button class="btn ${risky ? 'danger' : 'primary'}" data-m="refAgain" data-id="${it.id}" ${ok ? '' : 'disabled'}>続けて 精錬</button></div>`;
+    } else next = `<p class="r2">+${it.ref} に たっした！${it.ref < 11 ? '<br><span class="hint">（F400を こえると +11 まで きたえられる）</span>' : ''}</p><div class="opts"><button class="btn primary" data-m="close">OK</button></div>`;
+    showModal(`<p class="r2">精錬 せいこう！ +${r} → +${it.ref}<span class="hint">（×${REF_MUL[r]} → ×${REF_MUL[it.ref]}）</span></p><p><span class="r${it.rar}">${esc(it.name)}</span></p><div class="refups">${up || '<p class="hint" style="color:#ffb0a6">この装備には 基本性能（攻撃力・防御力・HP）が ないため、精錬しても 能力は 上がらない。</p>'}</div>${heroUp}${next}`);
+  } else {
+    for (const k of EQ) if (S.equip[k] === it) S.equip[k] = null;
+    S.inv = S.inv.filter(x => x !== it); S.stats2.broken++; save();
+    setTimeout(() => se('wipe'), 350);
+    showModal(`<p style="color:#ffb0a6">カキーン… ${esc(it.name)} は こなごなに くだけた。</p><div class="opts"><button class="btn primary" data-m="close">OK</button></div>`);
+  }
+  renderCamp(); renderParty();
+}
 /* ---------- command techniques ---------- */
 function tryCommand(seq){
   if (!R || R.phase !== 'fight' || R.paused || R.freeze > 0 || R.actors[0].dead) return false;
@@ -2239,13 +2388,16 @@ function tryCommand(seq){
   R.cmdCd = R.cmdCd || {};
   if (R.cmdCd[k] > 0){ callout(`${CMDS[k].n}… あと${Math.ceil(R.cmdCd[k])}秒`); return true; }
   if (!front()) return true;
-  R.cmdCd[k] = CMDS[k].cd;
-  const hs = R.hs, atk = hs.atk * (R.buff > 0 ? 1.5 : 1);
+  const hs = R.hs, atk = hs.atk * (R.buff > 0 ? 1.5 : 1) * (1 + (hs.pw.cmdDmg || 0) / 100);   // 忍者: hidden-technique damage
+  R.cmdCd[k] = CMDS[k].cd * (1 - Math.min(60, hs.pw.cmdCd || 0) / 100);
   const fresh = !S.cmdKnown[k]; S.cmdKnown[k] = true; track('cmd-' + k, 'かくし技：' + CMDS[k].n);
   flash(0.6, '#e8d8ff'); se('cmd'); R.shake = 0.3;
   banner(`${fresh ? 'かくし技を みつけた！' : ''}<b>${CMDS[k].n}</b>`, 'spark', 1400);
   log(`ゆうしゃの ${CMDS[k].n}！`);
   CMDS[k].fx(o => execAttack(Object.assign({atk, crit:hs.crit, critMul:hs.pw.critMul, heroSkill:true, hits:1, count:3, range:0}, o)), {hs, atk});
+  if (hs.pw.cmdTwice && Math.random() * 100 < hs.pw.cmdTwice){   // 忍者「分身の術」
+    setTimeout(() => { if (!R || R.phase !== 'fight') return; callout('分身の術！'); CMDS[k].fx(o => execAttack(Object.assign({atk, crit:hs.crit, critMul:hs.pw.critMul, heroSkill:true, hits:1, count:3, range:0}, o)), {hs, atk}); }, 350);
+  }
   save();
   return true;
 }
@@ -2339,8 +2491,33 @@ function floorClear(){
     S.cleared = {at: Date.now(), lv: S.hero.lv, job: S.job};
     R.paused = true;
     setTimeout(showEnding, 1400);
+  } else if (abyssLv() > (S.abyssSeen || 0)){
+    R.paused = true; R.hs = heroStats();
+    setTimeout(showAbyss, 1400);
   }
   save();
+}
+/* the window that hands out a 深淵の証 (also used once on load for titles earned before this feature existed) */
+function showAbyss(){
+  const from = S.abyssSeen || 0, to = abyssLv(); if (to <= from) return;
+  fitSlots();
+  const got = UNLOCKS.filter(u => u.f > (from + 1) * 50 && u.f <= (to + 1) * 50);
+  se('ending');
+  showModal(`<p class="r2" style="font-size:19px;text-align:center;letter-spacing:.08em">◆ ${abyssTitle(to)} ◆</p>
+    <p style="text-align:center">F${(to + 1) * 50} の 深淵を こえた。</p>
+    <p>称号「<span class="r2">${abyssTitle(to)}</span>」を えた。<br>ゆうしゃの 最大HP・攻撃力・防御力が ずっと <b class="r2">+${to * ABYSS_BONUS}%</b>（証 1つごとに +${ABYSS_BONUS}%）。</p>
+    ${got.map(u => `<div class="win" style="padding:10px 12px;margin-top:6px"><p class="r2" style="margin:0">解放：${u.n}</p><p class="hint" style="margin:4px 0 0">${u.d}</p></div>`).join('')}
+    <p class="hint">${(() => { const nx = UNLOCKS.find(u => u.f > (to + 1) * 50); return nx ? `F${nx.f} を こえると、また あたらしい 特典が 解放される…` : `F${(to + 2) * 50} で つぎの 証`; })()}</p>
+    <div class="opts"><button class="btn primary" data-m="abyssOk">OK</button></div>`);
+}
+function abyssPanel(){
+  if (!S.cleared) return '';
+  const n = abyssLv();
+  let h = `<h3>深淵の証</h3><p class="hint">F100から 50階ごとに 称号を え、ゆうしゃの 最大HP・攻撃力・防御力が +${ABYSS_BONUS}% ずつ 上がる。</p>`;
+  h += n ? `<p>いまの 称号：<span class="r2">${abyssTitle(n)}</span>（ずっと +${n * ABYSS_BONUS}%）／ つぎは F${(n + 2) * 50}</p>` : `<p class="hint">F100 を こえると 最初の 証が 手に入る。</p>`;
+  h += `<div class="list">${UNLOCKS.map(u => { const on = S.maxFloor >= u.f;
+    return `<div class="li" style="cursor:default"><div class="body"><div class="t"><span class="${on ? 'r2' : ''}">${on ? '✓ ' + u.n : '？？？'}</span><span class="hint">F${u.f}</span></div><div class="d">${on ? u.d : 'F' + u.f + ' を こえると 特典が 解放される'}</div></div></div>`; }).join('')}</div>`;
+  return h;
 }
 const CLEAR_FLOOR = 50;
 function showEnding(){
@@ -2367,6 +2544,7 @@ function showPostClear(){
       <li><b>敵の 数が 2倍</b>：群れを まとめて なぎはらう 爽快感。そのぶん 経験値も ゴールドも ザクザク。</li>
       <li><b>深層装備</b>：「深層の〇〇」は 基本性能 1.3倍、能力の 数値が 大きく ぶれる（★1〜3で 当たり外れ）。群れ殺し・連鎖爆発・乱戦の心得 など、群れと 戦う 特別な 能力（◈）つき。</li>
       <li><b>仕上げの 工房</b>：作り直しで 深層装備の ★を ねらい、精錬で +10（基本性能 10倍）を めざそう。</li>
+      <li><b>深淵の証</b>：F100から 50階ごとに 称号と 永続ボーナス（全能力 +5%ずつ）。F600までは 新しい ジョブや 要素も 解放される（出撃タブで 確認できる）。</li>
       <li><b>やりこみ</b>：12ジョブ すべての マスターと その先の ジョブ、全ユニークの 抽出、カード帖の コンプリート。</li>
     </ul>
     <div class="opts"><button class="btn primary" data-m="postclear">いざ、深みへ</button></div>`);
@@ -2428,7 +2606,7 @@ function useSkill(i, manual){
   if (R.actors[0].dead || R.cds[i] > 0) return;
   const def = SK[id];
   if (def.kind === 'buff' ? !front() || R.buff > 0 : !front()) return;
-  R.cds[i] = cdOf(id) * (manual ? 1 : BAL.autoCd);
+  R.cds[i] = cdOf(id) * (manual || R.hs.pw.danceCd ? 1 : BAL.autoCd);
   // spark check (romasaga style: the new move replaces the one you swung)
   const kids = Object.keys(SK).filter(k => SK[k].parent === id && !S.skills[k] && S.skills[id].m >= SK[k].req);
   if (kids.length && Math.random() < sparkChance(R.floor)){
@@ -2489,7 +2667,7 @@ function execHeroSkill(id){
   if (def.tree === '剣' && multi && setOn(hs, 'kenbu', 4)) hits += 2;
   if (def.tree === '弓' && multi && (def.hits || 1) > 1 && setOn(hs, 'tenkyu', 4)) hits += 3;
   if (def.wild) hits = ri(2, 14);
-  let mul = def.mul * ST_DMG[st] * (1 + hs.skill / 100) * (R.autoCast ? BAL.autoDmg : 1);
+  let mul = def.mul * ST_DMG[st] * (1 + hs.skill / 100) * (R.autoCast && !hs.pw.danceDmg ? BAL.autoDmg : 1);
   if (def.fx === 'bolt' && setOn(hs, 'raimei', 6)) mul *= 3;
   if (def.tree === '体術' && setOn(hs, 'kensei', 6)) mul *= 3;
   if (def.tree === '剣' && setOn(hs, 'kenbu', 6)) mul *= 3;
@@ -2519,6 +2697,8 @@ function execAttack(o){
     const crit = Math.random() * 100 < (o.crit || 5);
     let d = o.atk * o.mul * rnd(0.9, 1.1) * (crit ? (o.critMul || 1.8) : 1);
     if (o.heroSkill && e.boss && R.hs.pw.ryugoroshi) d *= 1.5;
+    if (o.heroSkill && R.hs.pw.dice) d *= Math.random() < 0.5 ? 1.8 : 0.6;
+    if (o.heroSkill && crit && R.hs.pw.zantetsu && !e.boss && Math.random() < 0.1) d = Math.max(d, e.hp + 1);
     if (o.heroSkill){ d *= holyMul(e); if (e.boss && R.hs.pw.bossDmg) d *= 1 + R.hs.pw.bossDmg / 100; if (e.boss && R.hs.pw.gravity) d += e.hp * 0.03; }
     fxAt(e, o.fx, o.gold);
     if (hurtEnemy(e, d, {crit, heroSkill:o.heroSkill})) kills++;
@@ -2620,7 +2800,8 @@ function fuseAllies(baseId, matId){
   a.capped = a.lv >= a.maxLv;
   S.stats2.fusions = (S.stats2.fusions || 0) + 1;
   let acc = null;
-  if (Math.random() < ACCIDENT_RATE * (S.dbg.accident ? 32 : 1)){
+  const fpw = curPw();
+  if (!fpw.fuseSafe && Math.random() < ACCIDENT_RATE * (S.dbg.accident ? 32 : 1) * (fpw.fuseWild ? 4 : 1)){
     const from = a.sp, fam = family(from), area = SP[from].area || 0;
     let cands = Object.keys(SP).filter(k => k !== from && family(k) === fam && (SP[k].rare || SP[k].boss || (SP[k].area || 0) > area));
     if (!cands.length) cands = Object.keys(SP).filter(k => SP[k].rare && k !== from);
@@ -2913,7 +3094,8 @@ function updParty(){
 const stars = st => '★'.repeat(st + 1) + `<s>${'★'.repeat(4 - st)}</s>`;
 function renderSkills(){
   let h = '';
-  for (let i = 0; i < 4; i++){
+  fitSlots();
+  for (let i = 0; i < nSlots(); i++){
     const id = S.slots[i];
     if (!id){ h += `<div class="win sk empty"><span class="n">― あき ―</span><span class="m">技を ひらめくと ここに入る</span></div>`; continue; }
     const m = S.skills[id].m, st = stageOf(m);
@@ -3043,6 +3225,7 @@ function panelGo(){
     ${S.cleared ? `<p class="r2" style="text-align:center">★ ゲームクリア済み ― F${CLEAR_FLOOR + 1}より先は やりこみの 深淵</p>` : `<p class="hint" style="text-align:center">目標：F${CLEAR_FLOOR} を とっぱすると ゲームクリア</p>`}
     <button class="btn primary" data-act="go">しゅつげき する</button>
     <label class="toggle"><span>クリア後 次の階層へ 自動で進む</span><input type="checkbox" id="optNext" data-act="next" ${S.autoNext ? 'checked' : ''}></label>
+    ${abyssPanel()}
     <h3>ゆうしゃ のつよさ（${JOBS[S.job].n} Lv${jobLv(S.job)}）</h3>
     <div class="kv">
       <span><i>最大HP</i>${hs.hp}</span><span><i>攻撃力</i>${hs.atk}</span>
@@ -3055,9 +3238,11 @@ function panelGo(){
 function skDepth(id){ let d = 0, p = SK[id].parent; while (p && SK[p].tree === SK[id].tree){ d++; p = SK[p].parent; } return d; }
 function panelSkill(){
   let h = `<h3>セット中の技</h3><p class="hint">枠をえらんでから、下の技をタップすると入れかわる。</p><div class="slots4">`;
-  for (let i = 0; i < 4; i++){
+  fitSlots();
+  for (let i = 0; i < nSlots(); i++){
     const id = S.slots[i];
-    h += `<button class="slot ${selSlot === i ? 'sel' : ''}" data-act="slot" data-i="${i}"><small>枠${i + 1}</small>${id ? skName(id) : '― あき ―'}</button>`;
+    const info = id ? `<span class="sd"><span class="st" style="color:var(--gold)">${stars(stageOf(S.skills[id].m))}</span> 再使用 ${SK[id].cd}秒<br>${SK[id].d}</span>` : '';
+    h += `<button class="slot ${selSlot === i ? 'sel' : ''}" data-act="slot" data-i="${i}"><small>枠${i + 1}</small>${id ? skName(id) : '― あき ―'}${info}</button>`;
   }
   h += `</div>`;
   for (const tree of TREES){
@@ -3277,6 +3462,7 @@ function panelJob(){
   for (const k in JOBS){
     const l = jobLv(k);
     if (!jobUnlocked(k)){
+      if (JOBS[k].hidden) continue;
       h += `<div class="li locked" style="cursor:default"><canvas width="12" height="13" data-icon="hero_${k}" style="filter:brightness(0) invert(.25)"></canvas><div class="body"><div class="t"><span>？？？</span></div><div class="d">解放条件：${JOBS[k].hint}</div></div></div>`;
       continue;
     }
@@ -3396,10 +3582,10 @@ function panelTown(){
     h += `<h3>精錬所</h3><p class="hint">ゴールドで 装備の 基本性能を きたえる。+6までは 1段階ごとに +10%、+7から先は 大きく伸びて +10で 10倍。<br><span style="color:#ffb0a6">+5から先は 失敗すると 装備が こわれる。</span></p>`;
     const row = (it, where) => {
       const r = it.ref || 0;
-      if (r >= 10) return `<div class="li u${it.rar}" style="cursor:default"><div class="body"><div class="t"><span class="r${it.rar}">${esc(it.name)}</span><span class="r2">最大</span></div><div class="d">${where}</div></div></div>`;
+      if (r >= refCap()) return `<div class="li u${it.rar}" style="cursor:default"><div class="body"><div class="t"><span class="r${it.rar}">${esc(it.name)}</span><span class="r2">最大</span></div><div class="d">${where}</div></div></div>`;
       const rate = refRate(r), cost = refCost(it), conf = confirmKey === 'ref' + it.id;
       return `<div class="li u${it.rar}" style="cursor:default;align-items:center"><div class="body"><div class="t"><span class="r${it.rar}">${esc(it.name)}</span><span class="num">+${r} → +${r + 1}<span class="hint">（×${REF_MUL[r]} → ×${REF_MUL[r + 1]}）</span></span></div>
-        <div class="d">${where} ／ 成功率 <span style="${rate < 1 ? 'color:#ffb0a6' : ''}">${Math.round(rate * 100)}%</span> ／ ${cost}G</div></div>
+        <div class="d">${where}${it.base.atk || it.base.def || it.base.hp ? '' : ' ／ <span style="color:#ffb0a6">基本性能なし（精錬しても 上がらない）</span>'} ／ 成功率 <span style="${rate < 1 ? 'color:#ffb0a6' : ''}">${Math.round(rate * 100)}%</span> ／ ${cost}G</div></div>
         <button class="btn sm ${conf ? 'danger' : ''}" data-act="refine" data-id="${it.id}" style="flex:none" ${S.gold >= cost ? '' : 'disabled'}>${conf ? '本当に<br>精錬' : '精錬'}</button></div>`;
     };
     h += `<h3>そうび中</h3><div class="list">${equipped().map(it => row(it, SLOTN[it.slot])).join('') || '<p class="hint">なにも そうびしていない。</p>'}</div>`;
@@ -3633,7 +3819,7 @@ $('#stealBtn').addEventListener('click', e => {
 });
 function updSpdBtn(){ const b = $('#spdBtn'); b.textContent = maxSpeed() > 1 ? `速度 ×${S.speed}` : '速度 ×1（時計塔で解放）'; }
 $('#spdBtn').addEventListener('click', () => {
-  const opts = [...SPEEDS, 32].filter(v => v <= maxSpeed());
+  const opts = [...SPEEDS.filter(v => v <= SPEEDS[facLv('clock')]), ...(x32ok() ? [32] : [])];
   S.speed = opts[(opts.indexOf(S.speed) + 1) % opts.length] || 1;
   if (maxSpeed() === 1) callout('町の「施設」で 時計塔を 広げると 速くできる');
   updSpdBtn(); save();
@@ -3675,6 +3861,8 @@ $('#modal').addEventListener('click', e => {
   if (m === 'saveCopy'){ const ta = $('#saveCode'); ta.select();
     (navigator.clipboard ? navigator.clipboard.writeText(ta.value) : Promise.reject()).then(() => $('#saveMsg').textContent = 'コピーした！', () => { try { document.execCommand('copy'); $('#saveMsg').textContent = 'コピーした！'; } catch(e){ $('#saveMsg').textContent = '自動で コピーできなかった。文字列を 長押しして コピーしてね。'; } });
     return; }
+  if (m === 'abyssOk'){ S.abyssSeen = abyssLv(); save(); hideModal(); if (R) R.paused = false; renderSkills(); renderCamp(); renderParty(); renderTop(); return; }
+  if (m === 'refAgain'){ const it = findItem(+b.dataset.id); hideModal(); if (it) doRefine(it); return; }
   if (m === 'saveFile'){
     const code = $('#saveCode').value, msg = $('#saveMsg');
     if (window.__dl){
@@ -3777,20 +3965,9 @@ $('#panel').addEventListener('click', e => {
     case 'refine': {
       const id = +b.dataset.id, it = findItem(id); if (!it) break;
       const r = it.ref || 0, rate = refRate(r), cost = refCost(it);
-      if (r >= 10 || S.gold < cost) break;
+      if (r >= refCap() || S.gold < cost) break;
       if (rate < 1 && confirmKey !== 'ref' + id){ confirmKey = 'ref' + id; break; }
-      confirmKey = null; S.gold -= cost; S.stats2.refines++;
-      se('anvil');
-      if (Math.random() < rate){
-        it.ref = r + 1; refName(it); save();
-        setTimeout(() => { se(it.ref >= 7 ? 'clear' : 'stage'); }, 350);
-        showModal(`<p class="r2">精錬 せいこう！</p><p><span class="r${it.rar}">${esc(it.name)}</span></p><p class="hint">${itemLines(it).join(' ／ ')}</p><div class="opts"><button class="btn primary" data-m="close">OK</button></div>`);
-      } else {
-        for (const k of EQ) if (S.equip[k] === it) S.equip[k] = null;
-        S.inv = S.inv.filter(x => x !== it); S.stats2.broken++; save();
-        setTimeout(() => se('wipe'), 350);
-        showModal(`<p style="color:#ffb0a6">カキーン… ${esc(it.name)} は こなごなに くだけた。</p><div class="opts"><button class="btn primary" data-m="close">OK</button></div>`);
-      }
+      confirmKey = null; doRefine(it);
       return; }
     case 'cslot': craftSlot = b.dataset.k; se('ui'); break;
     case 'craft': {
@@ -3912,6 +4089,7 @@ function start(data){
   updSpdBtn();
   updNextBtn();
   renderParty(); renderCamp(); renderTop();
+  { let tries = 0; const t = setInterval(() => { if (abyssLv() <= (S.abyssSeen || 0) || ++tries > 30){ clearInterval(t); return; } if ($('#modal').hidden && mode === 'camp'){ clearInterval(t); showAbyss(); } }, 1500); }
   log('ようこそ。じゅんびが できたら しゅつげき しよう。');
   clearInterval(saveIv); saveIv = setInterval(save, 5000);
   setTimeout(() => stallNotice(stallTick(), true), 400);
