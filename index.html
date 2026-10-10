@@ -1091,7 +1091,7 @@ function freshSave(){
     mats:{iron:0, leaf:0, mithril:0, crystal:0, star:0}, craft:{m:0},
     market:{day:'', bought:{}}, dayOff:0, stall:[], stallT:0, stallLog:[], cmdKnown:{},
     fac:{bag:0, stall:0, forge:0, inn:0, party:0, clock:0}, charmNext:{}, stats2:{refines:0, broken:0},
-    seenCoach:false, seenHelp:{}, helpVer:2, guard:0, autoRecruit:false,
+    seenCoach:false, seenHelp:{}, helpVer:2, guard:0, autoRecruit:false, dmgNum:'all', autoSellWeak:false,
     stats:{kills:0, sparks:0, recruits:0, cards:0},
   };
 }
@@ -1825,7 +1825,16 @@ const W = 200, H = 120, CONTACT = 94;
 const HERO_POS = {x:80, y:100};
 const ALLY_POS = [{x:62, y:93}, {x:60, y:110}, {x:42, y:101}, {x:30, y:91}];
 const G = {t:0, fx:[], floaters:[], parts:[]};
-const DIG = {0:'111101101101111',1:'010110010010111',2:'111001111100111',3:'111001111001111',4:'101101111001001',5:'111100111001111',6:'111100111101111',7:'111001001001001',8:'111101111101111',9:'111101111001111'};
+const DIG = {0:'111101101101111',1:'010110010010111',2:'111001111100111',3:'111001111001111',4:'101101111001001',5:'111100111001111',6:'111100111101111',7:'111001001001001',8:'111101111101111',9:'111101111001111',
+  K:'101101110101101', M:'101111111101101', B:'110101110101110', T:'111010010010010', E:'111100111100111', '.':'000000000000010'};
+/* damage numbers stay short: 12345 / 123K / 4.5M / 12B / 3.4T / 1.2E18 (long digit strings were slow to draw) */
+function fmtNum(v){
+  v = Math.round(v); if (v < 100000) return String(v);
+  const u = [[1e12, 'T'], [1e9, 'B'], [1e6, 'M'], [1e3, 'K']];
+  if (v >= 1e15){ const ex = Math.floor(Math.log10(v)); return (v / Math.pow(10, ex)).toFixed(1) + 'E' + ex; }
+  for (const [d, c] of u) if (v >= d){ const x = v / d; return (x >= 100 ? Math.floor(x) : x >= 10 ? x.toFixed(0) : x.toFixed(1)) + c; }
+  return String(v);
+}
 function drawNum(str, x, y, col, sc){
   const s = String(str), w = s.length * 4 * sc - sc;
   let cx = Math.round(x - w / 2); y = Math.round(y);
@@ -1842,7 +1851,10 @@ function drawNum(str, x, y, col, sc){
     }
   }
 }
-function floater(x, y, v, col, sc = 1){ G.floaters.push({x, y, v, col, sc, life:0.8}); if (G.floaters.length > 60) G.floaters.shift(); }
+function floater(x, y, v, col, sc = 1){
+  const m = S.dmgNum || 'all'; if (m === 'off' || (m === 'crit' && sc < 2)) return;   // setting: all / critical hits only / none
+  G.floaters.push({x, y, v:typeof v === 'number' ? fmtNum(v) : v, col, sc, life:0.8}); if (G.floaters.length > 60) G.floaters.shift();
+}
 function burst(x, y, col, n = 6, sp = 40){
   for (let i = 0; i < n; i++) G.parts.push({x, y, vx:rnd(-sp, sp), vy:rnd(-sp, sp * 0.3), life:rnd(0.25, 0.5), col});
   if (G.parts.length > 260) G.parts.splice(0, G.parts.length - 260);
@@ -2444,6 +2456,11 @@ function gainCardInRun(k, e){
   save();
 }
 function gainItem(it, e){
+  if (S.autoSellWeak && isWeak(it)){   // setting: sell what is no better than the current gear, on the spot
+    const g = sellPrice(it); S.gold += g; R.loot.gold += g; R.loot.items++; R.loot.autoSold = (R.loot.autoSold || 0) + 1;
+    burst(e.x, e.y - 4, '#ffd84a', 3, 16); if (it.rar >= 2) log(`<span class="r${it.rar}">${esc(it.name)}</span> を 自動で 売った（+${g.toLocaleString()}G）`);
+    return;
+  }
   addInv(it); R.loot.items++;
   if (it.rar >= 2){
     R.loot.rares++;
@@ -3429,7 +3446,8 @@ function panelGear(){
   const confW = confirmKey === 'sellWeak';
   h += `<div class="row"><button class="btn sm" data-act="best">おすすめ装備</button>
     <button class="btn sm ${confW ? 'danger' : ''}" data-act="sellWeak" ${weak.length ? '' : 'disabled'}>${confW ? `本当に ${weak.length}こ 売る（${wG.toLocaleString()}G）` : `弱い装備を まとめて売る（${weak.length}）`}</button></div>
-    <p class="hint">「弱い装備」＝ いまの装備以下の もの（ユニーク・セットも ふくむ）。鍵つき・伝説・カード入り・まだ 力を 抽出していない ユニークは 売らない。</p>`;
+    <p class="hint">「弱い装備」＝ いまの装備以下の もの（ユニーク・セットも ふくむ）。鍵つき・伝説・カード入り・まだ 力を 抽出していない ユニークは 売らない。</p>
+    <label class="toggle"><span>拾った 弱い装備を 自動で 売る</span><input type="checkbox" data-act="autoSell" ${S.autoSellWeak ? 'checked' : ''}></label>`;
   const cnt = sl => S.inv.filter(it => sl === 'all' || it.slot === sl).length;
   h += `<div class="chips">${[['all', '全部'], ...SLOTS.map(sl => [sl, SLOTN[sl]])].map(([k, n]) => `<button class="chip ${gSlot === k ? 'on' : ''}" data-act="gslot" data-k="${k}">${n}<small>${cnt(k)}</small></button>`).join('')}</div>
     <div class="chips">${[['score', '強い順'], ['rar', 'レア度順'], ['new', '新しい順']].map(([k, n]) => `<button class="chip ${gSort === k ? 'on' : ''}" data-act="gsort" data-k="${k}">${n}</button>`).join('')}
@@ -3691,6 +3709,9 @@ function panelCards(){
 function panelCfg(){
   return `<h3>あそびかた</h3>
     <label class="toggle"><span>仲間が おきあがったら すぐ「はい」（3秒 待たない）</span><input type="checkbox" data-act="autoRec" ${S.autoRecruit ? 'checked' : ''}></label>
+    <label class="toggle"><span>拾った 弱い装備を 自動で 売る</span><input type="checkbox" data-act="autoSell" ${S.autoSellWeak ? 'checked' : ''}></label>
+    <p class="hint" style="margin:0">ダメージの 数字（重いと 感じたら 減らしてね）</p>
+    <div class="row">${[['all', 'すべて'], ['crit', '会心だけ'], ['off', '出さない']].map(([k, n]) => `<button class="btn sm ${(S.dmgNum || 'all') === k ? 'primary' : ''}" data-act="dmgNum" data-k="${k}">${n}</button>`).join('')}</div>
     <h3>サウンド</h3>
     <label class="toggle"><span>音を鳴らす</span><input type="checkbox" id="optSnd" data-act="snd" ${S.snd.on ? 'checked' : ''}></label>
     <label class="toggle"><span>音量</span><input type="range" id="optVol" data-act="vol" min="0" max="1" step="0.05" value="${S.snd.vol}" style="max-width:60%"></label>
@@ -3929,6 +3950,7 @@ $('#panel').addEventListener('click', e => {
     case 'fl+': S.selFloor = Math.min(S.maxFloor + 1, S.selFloor + 1); se('ui'); break;
     case 'go': if (!S.seenCoach){ coach(); return; } startRun(S.selFloor); return;
     case 'manualSave': manualSave(); break;
+    case 'dmgNum': S.dmgNum = b.dataset.k; G.floaters = []; se('ui'); save(); break;
     case 'slot': selSlot = +b.dataset.i; se('ui'); break;
     case 'learn': {
       const id = b.dataset.id, cur = S.slots.indexOf(id);
@@ -4076,6 +4098,7 @@ $('#panel').addEventListener('change', e => {
   const t = e.target, act = t.dataset.act;
   if (act === 'next'){ S.autoNext = t.checked; updNextBtn(); }
   if (act === 'autoRec') S.autoRecruit = t.checked;
+  if (act === 'autoSell'){ S.autoSellWeak = t.checked; save(); renderCamp(); }
   if (act === 'star'){ craftStar = t.checked; renderCamp(); }
   if (act === 'snd'){ S.snd.on = t.checked; auInit(); auVol(); }
   save();
