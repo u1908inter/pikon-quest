@@ -1131,7 +1131,26 @@ function loadSave(data){
   S.uid = Math.max(S.uid || 0, ...S.allies.map(a => a.id || 0), ...S.inv.map(i => i.id || 0), ...Object.values(S.equip).map(i => (i && i.id) || 0));
   for (const al of S.allies) if (!al.cap999){ al.cap999 = true; al.maxLv = Math.max(al.maxLv, rollMaxLv()); al.capped = al.lv >= al.maxLv; }
 }
-function save(){ try { localStorage.setItem(SAVE_KEY, JSON.stringify(S)); } catch(e){} }
+let lastSaveAt = 0, saveWarned = false;
+function save(){
+  try { localStorage.setItem(SAVE_KEY, JSON.stringify(S)); lastSaveAt = Date.now(); return true; }
+  catch(e){   // e.g. private browsing or storage full: tell the player once instead of failing silently
+    if (!saveWarned){ saveWarned = true; try { toast('<span style="color:#ffb0a6">セーブに 失敗した。設定の「セーブの書き出し」で バックアップしてね</span>'); } catch(_){} }
+    return false;
+  }
+}
+/* manual save: write, then read it back to make sure it really landed */
+function manualSave(){
+  let ok = save();
+  try { ok = ok && localStorage.getItem(SAVE_KEY) === JSON.stringify(S); } catch(e){ ok = false; }
+  if (ok){ se('ui'); toast(`セーブした（${new Date(lastSaveAt).toLocaleTimeString('ja-JP', {hour:'2-digit', minute:'2-digit', second:'2-digit'})}）`); }
+  else toast('<span style="color:#ffb0a6">セーブできなかった。設定の「セーブの書き出し」で バックアップしてね</span>');
+  return ok;
+}
+const lastSaveText = () => lastSaveAt ? new Date(lastSaveAt).toLocaleTimeString('ja-JP', {hour:'2-digit', minute:'2-digit', second:'2-digit'}) : 'まだ';
+// save when the tab is hidden or closed (iPad / phones often suspend the page between auto-saves)
+document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden') save(); });
+window.addEventListener('pagehide', () => save());
 const allyById = id => S.allies.find(a => a.id === id);
 
 /* ---------- stats ---------- */
@@ -3225,6 +3244,7 @@ function panelGo(){
     ${S.cleared ? `<p class="r2" style="text-align:center">★ ゲームクリア済み ― F${CLEAR_FLOOR + 1}より先は やりこみの 深淵</p>` : `<p class="hint" style="text-align:center">目標：F${CLEAR_FLOOR} を とっぱすると ゲームクリア</p>`}
     <button class="btn primary" data-act="go">しゅつげき する</button>
     <label class="toggle"><span>クリア後 次の階層へ 自動で進む</span><input type="checkbox" id="optNext" data-act="next" ${S.autoNext ? 'checked' : ''}></label>
+    <div class="row" style="align-items:center;gap:10px"><button class="btn sm" data-act="manualSave">いま セーブする</button><span class="hint">最後の セーブ：${lastSaveText()}</span></div>
     ${abyssPanel()}
     <h3>ゆうしゃ のつよさ（${JOBS[S.job].n} Lv${jobLv(S.job)}）</h3>
     <div class="kv">
@@ -3683,7 +3703,8 @@ function panelCfg(){
     <p class="hint">セーブを 文字列に して 保存しておける。別の 端末や ブラウザで 読み込むと 続きから 遊べる（消えたときの 保険にも）。</p>
     <div class="row"><button class="btn" data-act="saveOut">書き出す</button><button class="btn" data-act="saveIn">読み込む</button></div>
     <h3>セーブ</h3>
-    <p class="hint">進行は この端末の ブラウザに 自動で保存される。<br>たおした数 ${S.stats.kills} ／ ひらめき ${S.stats.sparks} ／ なかまにした数 ${S.stats.recruits} ／ カード ${S.stats.cards}</p>
+    <p class="hint">進行は この端末の ブラウザに 自動で保存される（5秒ごと・画面を とじるとき）。手動でも セーブできる。<br>最後の セーブ：${lastSaveText()}<br>たおした数 ${S.stats.kills} ／ ひらめき ${S.stats.sparks} ／ なかまにした数 ${S.stats.recruits} ／ カード ${S.stats.cards}</p>
+    <div class="row"><button class="btn primary" data-act="manualSave">いま セーブする</button></div>
     <div class="row"><button class="btn danger" data-act="wipe">${confirmKey === 'wipe' ? '本当に 最初から やりなおす' : 'セーブを消して 最初から'}</button></div>`;
 }
 
@@ -3907,6 +3928,7 @@ $('#panel').addEventListener('click', e => {
     case 'fl-': S.selFloor = Math.max(1, S.selFloor - 1); se('ui'); break;
     case 'fl+': S.selFloor = Math.min(S.maxFloor + 1, S.selFloor + 1); se('ui'); break;
     case 'go': if (!S.seenCoach){ coach(); return; } startRun(S.selFloor); return;
+    case 'manualSave': manualSave(); break;
     case 'slot': selSlot = +b.dataset.i; se('ui'); break;
     case 'learn': {
       const id = b.dataset.id, cur = S.slots.indexOf(id);
