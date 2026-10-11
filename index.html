@@ -1136,6 +1136,7 @@ function loadSave(data){
   for (const it of [...S.inv, ...Object.values(S.equip)]) if (it && !it.cards) it.cards = [];
   S.uid = Math.max(S.uid || 0, ...S.allies.map(a => a.id || 0), ...S.inv.map(i => i.id || 0), ...Object.values(S.equip).map(i => (i && i.id) || 0));
   for (const al of S.allies) if (!al.cap999){ al.cap999 = true; al.maxLv = Math.max(al.maxLv, rollMaxLv()); al.capped = al.lv >= al.maxLv; }
+  refreshAllyCaps();
 }
 let lastSaveAt = 0, saveWarned = false;
 function save(){
@@ -1191,6 +1192,7 @@ const UNLOCKS = [
   {f:500, k:'q4',     n:'深層装備 ★4', d:'深層装備の 品質の 上限が 上がり、最高品質 ★★★★ が 出るように なる。工房の 作り直しでも ねらえる。'},
   {f:550, k:'abyssk', n:'新ジョブ「深淵の騎士」', d:'HPを 削って 攻撃力を 大きく 上げる、深淵の ジョブ。'},
   {f:600, k:'slot6',  n:'技の枠 6つ目', d:'技を 6つまで セットできる。'},
+  {f:650, k:'allyLv', n:'仲間の 限界突破', d:'仲間の 成長限界が 1万倍に なる。Lv999で 止まっていた 仲間も Lv999万まで 育つ（限界は 仲間ごとに ちがう）。深い階層で 戦わせるほど ぐんぐん 伸びる。'},
 ];
 const unlocked = k => (S.maxFloor || 0) >= UNLOCKS.find(u => u.k === k).f;
 const nSlots = () => 4 + (unlocked('slot5') ? 1 : 0) + (unlocked('slot6') ? 1 : 0);
@@ -1249,6 +1251,10 @@ function heroStats(){
   return s;
 }
 const ALLY_MAX_LV = 999;
+/* F650 深淵の特典「仲間の 限界突破」: each ally's own hidden limit (maxLv, 30–999) is multiplied, so a Lv999 ally can reach 999万 */
+const ALLY_BREAK_MUL = 10000;
+const allyCap = al => al.maxLv * ((S.maxFloor || 0) >= 650 ? ALLY_BREAK_MUL : 1);
+function refreshAllyCaps(){ for (const al of S.allies){ al.capped = al.lv >= allyCap(al); if (al.capped) al.exp = 0; } }
 const rollMaxLv = () => 30 + Math.floor((ALLY_MAX_LV - 30) * Math.pow(Math.random(), 2.5));   // most land 30–300, a lucky few near 999
 const PLUS_STEP = 0.03;   // each +1 from fusion: +3% HP and attack
 const allyName = al => al.name + (al.plus ? `+${al.plus}` : '');
@@ -2509,15 +2515,16 @@ function gainExp(x){
   }
   for (const a of R.actors){
     if (a.kind !== 'ally' || a.dead) continue;
-    const al = allyById(a.id); if (!al || al.lv >= al.maxLv) continue;
+    const al = allyById(a.id); if (!al) continue;
+    const cap = allyCap(al); if (al.lv >= cap) continue;
     al.exp += x;
-    while (al.lv < al.maxLv && al.exp >= needExp(al.lv) * 0.8){
-      al.exp -= Math.round(needExp(al.lv) * 0.8); al.lv++;
-      const st = allyStats(al), m = allyMods(R.hs), nh = Math.round(st.hp * m.hp); a.hp += nh - a.max; a.max = nh; a.atk = Math.round(st.atk * m.atk); a.def = st.def;
-      if (al.lv >= al.maxLv){ al.capped = true; al.exp = 0;
-        log(`${al.name}は もう これいじょう つよく なれないようだ…`); }
-      else log(`${al.name}は レベル${al.lv}に あがった！`);
-    }
+    let ups = 0;   // count the levels first (deep floors give many at once), then refresh stats once
+    while (al.lv < cap && al.exp >= needExp(al.lv) * 0.8 && ups < 200000){ al.exp -= Math.round(needExp(al.lv) * 0.8); al.lv++; ups++; }
+    if (!ups) continue;
+    const st = allyStats(al), m = allyMods(R.hs), nh = Math.round(st.hp * m.hp); a.hp += nh - a.max; a.max = nh; a.atk = Math.round(st.atk * m.atk); a.def = st.def;
+    if (al.lv >= cap){ al.capped = true; al.exp = 0;
+      log(`${al.name}は もう これいじょう つよく なれないようだ…`); }
+    else log(`${al.name}は レベル${fmtN(al.lv)}に あがった！${ups > 1 ? `（+${fmtN(ups)}）` : ''}`);
   }
 }
 function waveDone(){
@@ -2543,7 +2550,7 @@ function trackFloor(f){
 }
 function floorClear(){
   R.phase = 'clear'; R.endT = 2.6; R.loot.floors++;
-  S.maxFloor = Math.max(S.maxFloor, R.floor); trackFloor(R.floor);
+  S.maxFloor = Math.max(S.maxFloor, R.floor); trackFloor(R.floor); if (R.floor === 650) refreshAllyCaps();
   banner(`F${R.floor} クリア！`, 'gold', 2000); se('clear'); playSong(null);
   log(`F${R.floor} を とっぱした！`);
   if (R.floor >= CLEAR_FLOOR && !S.cleared){
@@ -2837,7 +2844,7 @@ let recTimer = null;
 function newAlly(spk, f){
   const sp = SP[spk];
   const maxLv = rollMaxLv();   // hidden growth cap (up to 999)
-  const lv = Math.min(maxLv, Math.max(1, enemyLv(f) - 2));
+  const lv = Math.min(maxLv * ((S.maxFloor || 0) >= 650 ? ALLY_BREAK_MUL : 1), Math.max(1, enemyLv(f) - 2));
   const used = new Set(S.allies.map(a => a.name));
   let name = sp.names.find(n => !used.has(n));
   if (!name){ let k = 2; const b = sp.names[S.allies.length % sp.names.length]; while (used.has(b + k)) k++; name = b + k; }
@@ -2856,7 +2863,7 @@ function fuseAllies(baseId, matId){
   S.party = S.party.map(id => id === m.id ? null : id);
   a.plus = (a.plus || 0) + 1 + (m.plus || 0);
   a.maxLv = Math.min(ALLY_MAX_LV, Math.max(a.maxLv, m.maxLv) + 2);
-  a.capped = a.lv >= a.maxLv;
+  a.capped = a.lv >= allyCap(a);
   S.stats2.fusions = (S.stats2.fusions || 0) + 1;
   let acc = null;
   const fpw = curPw();
@@ -2867,7 +2874,7 @@ function fuseAllies(baseId, matId){
     a.sp = pick(cands);
     a.plus += 5;
     a.g = {hp: a.g.hp * 1.25, atk: a.g.atk * 1.25};
-    a.maxLv = Math.min(ALLY_MAX_LV, a.maxLv + 50); a.capped = a.lv >= a.maxLv;
+    a.maxLv = Math.min(ALLY_MAX_LV, a.maxLv + 50); a.capped = a.lv >= allyCap(a);
     a.accident = true;
     S.stats2.accidents = (S.stats2.accidents || 0) + 1;
     acc = {from};
@@ -2924,9 +2931,9 @@ function openFusePicker(baseId){
   fusePick = {base: baseId, mat: null};
   const inParty = new Set(S.party.filter(Boolean));
   const mats = S.allies.filter(x => x !== a && x.sp === a.sp && !inParty.has(x.id)).sort((x, y) => (x.plus || 0) - (y.plus || 0) || x.lv - y.lv);
-  showModal(`<p><span class="r2">${esc(allyName(a))}</span>（${SP[a.sp].n} Lv${a.lv}）に 合成する なかま</p>
+  showModal(`<p><span class="r2">${esc(allyName(a))}</span>（${SP[a.sp].n} Lv${fmtN(a.lv)}）に 合成する なかま</p>
     <p class="hint">えらんだ なかまは いなくなり、そのぶん ＋ が ふえる（＋1ごとに HP・攻撃 +3%）。パーティの なかまは えらべない。</p>
-    ${mats.length ? `<div class="list" style="max-height:50vh;overflow:auto">${mats.map(m => `<button class="li" data-m="fu-pick" data-id="${m.id}"><div class="body"><div class="t"><span>${esc(allyName(m))}</span><span class="num">Lv${m.lv}</span></div><div class="d">合成すると ＋${(a.plus || 0) + 1 + (m.plus || 0)} ／ ${fmtN(fuseCost(a, m))}G</div></div></button>`).join('')}</div>`
+    ${mats.length ? `<div class="list" style="max-height:50vh;overflow:auto">${mats.map(m => `<button class="li" data-m="fu-pick" data-id="${m.id}"><div class="body"><div class="t"><span>${esc(allyName(m))}</span><span class="num">Lv${fmtN(m.lv)}</span></div><div class="d">合成すると ＋${(a.plus || 0) + 1 + (m.plus || 0)} ／ ${fmtN(fuseCost(a, m))}G</div></div></button>`).join('')}</div>`
       : `<p class="hint">同じ 種族（${SP[a.sp].n}）の 控えが いない。</p>`}
     <div class="opts"><button class="btn" data-m="close">やめる</button></div>`);
 }
@@ -2934,7 +2941,7 @@ function confirmFuse(matId){
   const a = allyById(fusePick.base), m = allyById(matId); if (!a || !m) return;
   fusePick.mat = matId;
   const cost = fuseCost(a, m);
-  showModal(`<p><span class="r2">${esc(allyName(a))}</span> に <span>${esc(allyName(m))}</span>（Lv${m.lv}）を 合成します。</p>
+  showModal(`<p><span class="r2">${esc(allyName(a))}</span> に <span>${esc(allyName(m))}</span>（Lv${fmtN(m.lv)}）を 合成します。</p>
     <p style="color:#ffb0a6">${esc(allyName(m))}は いなくなります。</p>
     <p class="hint">費用 ${fmtN(cost)}G（いま ${fmtN(S.gold)}G）</p>
     <div class="opts"><button class="btn" data-m="close">やめる</button><button class="btn primary" data-m="fu-do" ${S.gold >= cost ? '' : 'disabled'}>合成する</button></div>`);
@@ -2954,7 +2961,7 @@ function showFuseResult(r){
     se('fuse');
     const st = allyStats(a);
     showModal(`<p style="text-align:center">合成 せいこう！</p><canvas id="fuCv" width="24" height="24"></canvas>
-      <p style="text-align:center"><span class="r2">${esc(allyName(a))}</span>（${sp.n} Lv${a.lv}）</p>
+      <p style="text-align:center"><span class="r2">${esc(allyName(a))}</span>（${sp.n} Lv${fmtN(a.lv)}）</p>
       <p class="hint" style="text-align:center">HP ${fmtN(st.hp)} ／ 攻 ${fmtN(st.atk)} ／ 守 ${fmtN(st.def)}</p>
       <div class="opts"><button class="btn primary" data-m="close">OK</button></div>`);
   }
@@ -3361,7 +3368,7 @@ function panelAlly(){
     h += `<button class="li grp ${open ? 'open' : ''}" data-act="grp" data-k="${k}" aria-expanded="${open}">
       <canvas width="16" height="16" data-icon="${sp.spr}"></canvas>
       <div class="body"><div class="t"><span>${sp.n} <span class="num">×${grp.length}</span></span><span class="arrow">${open ? '▼' : '▶'}</span></div>
-      <div class="d">${sp.role} ／ 最高 Lv${grp[0].lv}${capped ? ` ／ 限界 ${capped}体` : ''}</div></div></button>`;
+      <div class="d">${sp.role} ／ 最高 Lv${fmtN(grp[0].lv)}${capped ? ` ／ 限界 ${capped}体` : ''}</div></div></button>`;
     if (open){
       const p = bulkPlan(k), conf = confirmKey === 'fuseSp' + k;
       h += `<div class="list grpbody">${p ? `<div class="row" style="align-items:center"><button class="btn sm ${conf ? 'danger' : ''}" data-act="fuseSp" data-k="${k}" ${S.gold >= p.cost ? '' : 'disabled'}>${conf ? '本当に 合成' : 'まとめて合成'}</button>
@@ -3377,7 +3384,7 @@ function allyRow(al, key, sel){
   const conf = confirmKey === 'bye' + al.id;
   return `<div class="li ${sel ? 'sel' : ''}" data-act="${inP >= 0 ? 'pslot' : 'res'}" data-i="${inP}" data-id="${al.id}" role="button" tabindex="0">
     <canvas width="16" height="16" data-icon="${sp.spr}"></canvas>
-    <div class="body"><div class="t"><span>${esc(allyName(al))}<span class="tag" style="color:var(--dim)">${sp.n}</span>${al.accident ? '<span class="tag" style="color:#ff8a9a">事故</span>' : ''}</span><span class="num">Lv${al.lv}${al.capped ? '<span class="tag" style="color:var(--hpl)">限界</span>' : ''}</span></div>
+    <div class="body"><div class="t"><span>${esc(allyName(al))}<span class="tag" style="color:var(--dim)">${sp.n}</span>${al.accident ? '<span class="tag" style="color:#ff8a9a">事故</span>' : ''}</span><span class="num">Lv${fmtN(al.lv)}${al.capped ? '<span class="tag" style="color:var(--hpl)">限界</span>' : ''}</span></div>
     <div class="d">${sp.role} ／ HP ${fmtN(st.hp)} 攻 ${fmtN(st.atk)} 守 ${fmtN(st.def)} ／ 技: ${sp.sk.n}</div>
     <div class="row" style="margin-top:4px"><button class="btn sm" data-act="fuse" data-id="${al.id}">合成</button>${inP < 0 ? `<button class="btn sm ${conf ? 'danger' : ''}" data-act="bye" data-id="${al.id}">${conf ? '本当に わかれる' : 'わかれる'}</button>` : ''}</div>
     </div></div>`;
@@ -3385,7 +3392,7 @@ function allyRow(al, key, sel){
 function allyRowCompact(al, sel){
   const st = allyStats(al), conf = confirmKey === 'bye' + al.id;
   return `<div class="li ${sel ? 'sel' : ''}" data-act="res" data-i="-1" data-id="${al.id}" role="button" tabindex="0" style="align-items:center;padding:5px 8px">
-    <div class="body"><div class="t"><span>${esc(allyName(al))}${al.accident ? '<span class="tag" style="color:#ff8a9a">事故</span>' : ''}</span><span class="num">Lv${al.lv}${al.capped ? '<span class="tag" style="color:var(--hpl)">限界</span>' : ''}</span></div>
+    <div class="body"><div class="t"><span>${esc(allyName(al))}${al.accident ? '<span class="tag" style="color:#ff8a9a">事故</span>' : ''}</span><span class="num">Lv${fmtN(al.lv)}${al.capped ? '<span class="tag" style="color:var(--hpl)">限界</span>' : ''}</span></div>
     <div class="d num">HP ${fmtN(st.hp)} ／ 攻 ${fmtN(st.atk)} ／ 守 ${fmtN(st.def)}</div></div>
     <div class="row" style="flex:none;gap:4px"><button class="btn sm" data-act="fuse" data-id="${al.id}">合成</button><button class="btn sm ${conf ? 'danger' : ''}" data-act="bye" data-id="${al.id}">${conf ? '本当に' : 'わかれる'}</button></div></div>`;
 }
@@ -3519,7 +3526,7 @@ function panelJob(){
       <div class="hint">${J.base}</div>
       ${J.special ? '<p class="hint">覚える アビリティは ない。かわりに マスター枠が 2倍に なる。</p>' : `<div class="bar"><b style="width:${M ? 100 : (jp - prev) / (next - prev) * 100}%;background:var(--gold)"></b></div>
       <div class="hint num">JP ${Math.floor(jp)}${M ? '' : ` / 次のLvまで ${Math.ceil(next - jp)}`}（敵1体で1、ボス10）</div>`}</div></div>
-    <div>${J.ab.map(a => `<div class="ab ${lv >= a.lv ? '' : 'lock'}"><span>${lv >= a.lv ? '◆' : '◇'} ${a.n}<span class="hint">　${a.d}</span></span><span style="white-space:nowrap"><span class="cat ${a.cat}">${CAT_N[a.cat]}</span> Lv${a.lv}</span></div>`).join('')}</div>
+    <div>${J.ab.map(a => `<div class="ab ${lv >= a.lv ? '' : 'lock'}"><span>${lv >= a.lv ? '◆' : '◇'} ${a.n}<span class="hint">　${a.d}</span></span><span style="white-space:nowrap"><span class="cat ${a.cat}">${CAT_N[a.cat]}</span> Lv${fmtN(a.lv)}</span></div>`).join('')}</div>
     <h3>ジョブを かえる</h3><p class="hint">いつでも 無料で かえられる。JPは ジョブごとに たまる。</p><div class="list">`;
   for (const k in JOBS){
     const l = jobLv(k);
