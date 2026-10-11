@@ -70,6 +70,7 @@ button{font:inherit;color:inherit}
 .pm{padding:4px 6px 6px;min-width:0;font-size:11px;line-height:1.3}
 .pm .nm{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-size:12px}
 .pm .lv{color:var(--dim);font-variant-numeric:tabular-nums}
+.pm .lv [data-hp]{display:block;white-space:nowrap;overflow:hidden;text-overflow:clip;letter-spacing:-.03em}
 .pm.dead{opacity:.45}
 .pm.empty{color:var(--dim);border-style:dashed;display:grid;place-items:center;min-height:52px}
 .bar{height:5px;background:#24262e;margin-top:3px;position:relative}
@@ -694,7 +695,7 @@ const JOBS = {
     A('大商人',       'spc', '工房の ゴールド費用 半額',              s => s.pw.bigMerchant = true),
     A('倉庫番',       'spc', '持ち物の 上限 +40',                   s => s.pw.storage = true),
     A('富豪',         'spc', 'ゴールド +80%、カードの 売値 2倍',      s => { s.gold += 80; s.pw.cardSell2 = true; }),
-    A('札束の威光',   'atk', '攻撃力 +（所持金の 桁数×4）%　例：1万Gで +20%、100万Gで +28%（お金は 減らない）', s => { s.atkPct += 4 * String(Math.max(1, Math.floor(S.gold))).length; })]},
+    A('札束の威光',   'atk', '攻撃力 +（所持金の 桁数×4）%　例：1万Gで +20%、100万Gで +28%（お金は 減らない）', s => { s.atkPct += 4 * (Math.floor(Math.log10(Math.max(1, Math.min(S.gold, 1e300)))) + 1); })]},
   asobi:  {n:'遊び人',   col:'#e86ab0', d:'気まぐれ', abyss:true, base:'経験値 +20%', bfx:s => { s.exp += 20; },
     unlock:() => S.maxFloor >= 100, hint:'深淵の 奥で めざめる', ab:[
     A('あそぶ',       'spc', '経験値 +15%',                        s => s.exp += 15),
@@ -969,9 +970,9 @@ const BASE_N = {
 };
 const RARE_PRE = ['剛力の','疾風の','守護の','閃きの','覇王の','月光の','烈火の'];
 const AFF = {
-  atk:  {n:'攻撃力',   f:v=>`+${v}`},
-  def:  {n:'防御力',   f:v=>`+${v}`},
-  hp:   {n:'最大HP',   f:v=>`+${v}`},
+  atk:  {n:'攻撃力',   f:v=>`+${fmtN(v)}`},
+  def:  {n:'防御力',   f:v=>`+${fmtN(v)}`},
+  hp:   {n:'最大HP',   f:v=>`+${fmtN(v)}`},
   crit: {n:'会心率',   f:v=>`+${v}%`},
   aspd: {n:'攻撃速度', f:v=>`+${v}%`},
   skill:{n:'技ダメージ', f:v=>`+${v}%`},
@@ -1400,9 +1401,9 @@ const sellPrice = it => Math.round(Math.min(it.rar + 1, 4) ** 2 * it.ilv * 3 * (
 function itemLines(it){
   const b = [];
   const m = refMul(it);
-  if (it.base.atk) b.push(`攻撃力 ${Math.round(it.base.atk * m)}`);
-  if (it.base.def) b.push(`防御力 ${Math.round(it.base.def * m)}`);
-  if (it.base.hp) b.push(`HP ${Math.round(it.base.hp * m)}`);
+  if (it.base.atk) b.push(`攻撃力 ${fmtN(it.base.atk * m)}`);
+  if (it.base.def) b.push(`防御力 ${fmtN(it.base.def * m)}`);
+  if (it.base.hp) b.push(`HP ${fmtN(it.base.hp * m)}`);
   return [b.join(' / '), ...it.aff.map(a => `${AFF[a.k].n} ${AFF[a.k].f(a.v)}${a.q ? ' ' + qStars(a.q) : ''}`)].filter(Boolean);
 }
 const precious = it => it.lock || it.rar >= 3 || (it.cards || []).some(Boolean);
@@ -1833,6 +1834,21 @@ const G = {t:0, fx:[], floaters:[], parts:[]};
 const DIG = {0:'111101101101111',1:'010110010010111',2:'111001111100111',3:'111001111001111',4:'101101111001001',5:'111100111001111',6:'111100111101111',7:'111001001001001',8:'111101111101111',9:'111101111001111',
   K:'101101110101101', M:'101111111101101', B:'110101110101110', T:'111010010010010', E:'111100111100111', '.':'000000000000010'};
 /* damage numbers stay short: 12345 / 123K / 4.5M / 12B / 3.4T / 1.2E18 (long digit strings were slow to draw) */
+/* UI text numbers: commas below 100万, then 日本語の 単位（1234万 / 12.3億 / 1.50兆 / 349京 / 2.50垓）, E表記 beyond */
+const JP_UNITS = [[1e20, '垓'], [1e16, '京'], [1e12, '兆'], [1e8, '億'], [1e4, '万']];
+function fmtJ(v, from){
+  v = +v || 0; if (!isFinite(v)) return '∞';
+  v = Math.round(v); const a = Math.abs(v);
+  if (a < from) return v.toLocaleString();
+  if (a >= 1e24){ const ex = Math.floor(Math.log10(a)); return (v / Math.pow(10, ex)).toFixed(2) + 'E' + ex; }
+  for (const [d, c] of JP_UNITS) if (a >= d){ const x = v / d, ax = Math.abs(x);
+    return (ax >= 1000 ? Math.floor(x) : ax >= 100 ? Math.floor(x) : ax >= 10 ? x.toFixed(1) : x.toFixed(2)).toString().replace(/\.0+$/, '') + c; }
+  return v.toLocaleString();
+}
+const fmtN = v => fmtJ(v, 1e6);
+const fmtS = v => fmtJ(v, 1e4);   // tight spots (party HP)
+/* party cell: "69/69" while small; once HP is 1万+ only the current value fits (the bar shows the rest) */
+const pmHp = a => a.max >= 1e4 ? fmtS(Math.ceil(a.hp)) : `${Math.ceil(a.hp)}/${a.max}`;
 function fmtNum(v){
   v = Math.round(v); if (v < 100000) return String(v);
   const u = [[1e12, 'T'], [1e9, 'B'], [1e6, 'M'], [1e3, 'K']];
@@ -2081,7 +2097,7 @@ function tickTimers(dt){
   if (pw.sumHeal) run('heal', 30 * fast, () => { callout('召喚・宝石獣！'); se('heal'); for (const a of R.actors) if (!a.dead){ healActor(a, a.max * 0.3); burst(a.x, a.y - 8, '#7cf08a', 6, 20); } });
   if (pw.sumBaha) run('baha', 40 * fast, () => summonAtk('召喚・竜王', {kind:'all', mul:12, fx:'bolt'}, true));
   if (pw.meteor) run('meteor', 30, () => summonAtk('メテオ', {kind:'all', mul:6, fx:'fire'}, true));
-  if (pw.zeni) run('zeni', 30, () => { const c = Math.max(10, Math.floor(S.gold * 0.005)); if (S.gold < c) return; S.gold -= c; summonAtk(`ぜになげ（-${c}G）`, {kind:'all', mul:5, fx:'hit'}); });
+  if (pw.zeni) run('zeni', 30, () => { const c = Math.max(10, Math.floor(S.gold * 0.005)); if (S.gold < c) return; S.gold -= c; summonAtk(`ぜになげ（-${fmtN(c)}G）`, {kind:'all', mul:5, fx:'hit'}); });
 }
 function heroNormal(a, tgt){
   const hs = R.hs, pw = hs.pw;
@@ -2227,7 +2243,7 @@ function killEnemy(e){
     G.fx.push({k:'beam', x:e.x, y:e.y, life:1.2, col:'#e8f0ff'});
     if (tr === 'gem'){ let it; do { it = genItem(f, true); } while (it.rar < 2); gainItem(it, e); }
     if (tr === 'phantom'){ S.boxes += 3; R.loot.boxes += 3; log('<span class="r1">青箱</span> を 3こ てにいれた！'); }
-    if (tr === 'gold') log(`${gold} ゴールドを てにいれた！`);
+    if (tr === 'gold') log(`${fmtN(gold)} ゴールドを てにいれた！`);
     if (tr === 'metal') log(`けいけんちを たっぷり かくとく！`);
   }
   // card roll (RO style: very rare, one card per monster)
@@ -2280,7 +2296,7 @@ function stealFrom(t, manual){
   if (Math.random() < 0.25 * mul){
     t.stolen = true;
     if (Math.random() < 0.05){ S.boxes++; R.loot.boxes++; log('<span class="r1">青箱</span>を ぬすんだ！'); }
-    else { const g = Math.round(5 * gGold(R.floor) * rnd(1, 3)); S.gold += g; R.loot.gold += g; callout(`${g}G ぬすんだ`); }
+    else { const g = Math.round(5 * gGold(R.floor) * rnd(1, 3)); S.gold += g; R.loot.gold += g; callout(`${fmtN(g)}G ぬすんだ`); }
     burst(t.x, t.y - 6, '#ffd84a', 5, 20); se('drop');
   } else if (manual) callout('ぬすみそこねた');
 }
@@ -2332,11 +2348,11 @@ function stallTick(){
 function stallNotice(sold, away){
   if (!sold.length) return;
   const total = sold.reduce((a, x) => a + x.price, 0);
-  if (mode === 'battle'){ log(`露店で ${sold.length}こ 売れた！ +${total}G`); return; }
-  if (!$('#modal').hidden){ toast(`露店で ${sold.length}こ 売れた！ <span class="r2">+${total}G</span>`); return; }
+  if (mode === 'battle'){ log(`露店で ${sold.length}こ 売れた！ +${fmtN(total)}G`); return; }
+  if (!$('#modal').hidden){ toast(`露店で ${sold.length}こ 売れた！ <span class="r2">+${fmtN(total)}G</span>`); return; }
   showModal(`<p>${away ? 'るすの あいだに ' : ''}露店で ${sold.length}こ 売れた！</p>
-    <ul>${sold.map(x => `<li>${esc(x.kind === 'item' ? x.item.name : CARDS[x.key].n)} … ${x.price}G</li>`).join('')}</ul>
-    <p class="r2">+${total} G</p><div class="opts"><button class="btn primary" data-m="close">OK</button></div>`);
+    <ul>${sold.map(x => `<li>${esc(x.kind === 'item' ? x.item.name : CARDS[x.key].n)} … ${fmtN(x.price)}G</li>`).join('')}</ul>
+    <p class="r2">+${fmtN(total)} G</p><div class="opts"><button class="btn primary" data-m="close">OK</button></div>`);
   se('clear');
 }
 /* ---------- crafting ---------- */
@@ -2396,16 +2412,16 @@ function doRefine(it){
     // what this step changed: the item's base numbers, and the hero's totals when it is worn
     const m1 = refMul(it), up = [['atk', '攻撃力'], ['def', '防御力'], ['hp', 'HP']].filter(([k]) => it.base[k]).map(([k, n]) => {
       const a = Math.round(it.base[k] * m0), b2 = Math.round(it.base[k] * m1);
-      return `<div class="refup"><span>${n}</span><span class="num">${a.toLocaleString()} → <b>${b2.toLocaleString()}</b></span><span class="r2 num">+${(b2 - a).toLocaleString()}</span></div>`; }).join('');
+      return `<div class="refup"><span>${n}</span><span class="num">${fmtN(a)} → <b>${fmtN(b2)}</b></span><span class="r2 num">+${fmtN((b2 - a))}</span></div>`; }).join('');
     let heroUp = '';
     if (hs0){ const hs1 = heroStats(), d = [['atk', '攻撃力'], ['def', '防御力'], ['hp', '最大HP']].filter(([k]) => Math.round(hs1[k]) !== Math.round(hs0[k]))
-      .map(([k, n]) => `${n} ${Math.round(hs0[k]).toLocaleString()} → ${Math.round(hs1[k]).toLocaleString()}（+${Math.round(hs1[k] - hs0[k]).toLocaleString()}）`);
+      .map(([k, n]) => `${n} ${fmtN(Math.round(hs0[k]))} → ${fmtN(Math.round(hs1[k]))}（+${fmtN(Math.round(hs1[k] - hs0[k]))}）`);
       if (d.length) heroUp = `<p class="hint">ゆうしゃ：${d.join(' ／ ')}</p>`; }
     setTimeout(() => { se(it.ref >= 7 ? 'clear' : 'stage'); }, 350);
     let next = '';
     if (it.ref < refCap()){
       const nr = refRate(it.ref), nc = refCost(it), ok = S.gold >= nc, risky = nr < 1;
-      next = `<p class="hint">つぎ：+${it.ref} → +${it.ref + 1}（×${REF_MUL[it.ref]} → ×${REF_MUL[it.ref + 1]}）／ 成功率 <span style="${risky ? 'color:#ffb0a6' : ''}">${Math.round(nr * 100)}%</span> ／ ${nc}G${risky ? '<br><span style="color:#ffb0a6">失敗すると こわれる</span>' : ''}${ok ? '' : '<br>ゴールドが たりない'}</p>`;
+      next = `<p class="hint">つぎ：+${it.ref} → +${it.ref + 1}（×${REF_MUL[it.ref]} → ×${REF_MUL[it.ref + 1]}）／ 成功率 <span style="${risky ? 'color:#ffb0a6' : ''}">${Math.round(nr * 100)}%</span> ／ ${fmtN(nc)}G${risky ? '<br><span style="color:#ffb0a6">失敗すると こわれる</span>' : ''}${ok ? '' : '<br>ゴールドが たりない'}</p>`;
       next += `<div class="opts"><button class="btn" data-m="close">やめる</button><button class="btn ${risky ? 'danger' : 'primary'}" data-m="refAgain" data-id="${it.id}" ${ok ? '' : 'disabled'}>続けて 精錬</button></div>`;
     } else next = `<p class="r2">+${it.ref} に たっした！${it.ref < 11 ? '<br><span class="hint">（F400を こえると +11 まで きたえられる）</span>' : ''}</p><div class="opts"><button class="btn primary" data-m="close">OK</button></div>`;
     showModal(`<p class="r2">精錬 せいこう！ +${r} → +${it.ref}<span class="hint">（×${REF_MUL[r]} → ×${REF_MUL[it.ref]}）</span></p><p><span class="r${it.rar}">${esc(it.name)}</span></p><div class="refups">${up || '<p class="hint" style="color:#ffb0a6">この装備には 基本性能（攻撃力・防御力・HP）が ないため、精錬しても 能力は 上がらない。</p>'}</div>${heroUp}${next}`);
@@ -2463,7 +2479,7 @@ function gainCardInRun(k, e){
 function gainItem(it, e){
   if (S.autoSellWeak && isWeak(it)){   // setting: sell what is no better than the current gear, on the spot
     const g = sellPrice(it); S.gold += g; R.loot.gold += g; R.loot.items++; R.loot.autoSold = (R.loot.autoSold || 0) + 1;
-    burst(e.x, e.y - 4, '#ffd84a', 3, 16); if (it.rar >= 2) log(`<span class="r${it.rar}">${esc(it.name)}</span> を 自動で 売った（+${g.toLocaleString()}G）`);
+    burst(e.x, e.y - 4, '#ffd84a', 3, 16); if (it.rar >= 2) log(`<span class="r${it.rar}">${esc(it.name)}</span> を 自動で 売った（+${fmtN(g)}G）`);
     return;
   }
   addInv(it); R.loot.items++;
@@ -2489,7 +2505,7 @@ function gainExp(x){
   if (ups){
     const old = R.hs; R.hs = heroStats();
     const h = R.actors[0]; h.max = R.hs.hp; h.def = R.hs.def; if (!h.dead) h.hp = Math.min(h.max, h.hp + (R.hs.hp - old.hp));
-    log(`ゆうしゃは レベル${S.hero.lv}に あがった！${ups > 1 ? `（+${ups}）` : ''}`); se('lvup');
+    log(`ゆうしゃは レベル${fmtN(S.hero.lv)}に あがった！${ups > 1 ? `（+${ups}）` : ''}`); se('lvup');
   }
   for (const a of R.actors){
     if (a.kind !== 'ally' || a.dead) continue;
@@ -2568,9 +2584,9 @@ function showEnding(){
   const skills = Object.keys(S.skills).length, album = Object.keys(S.album).length;
   const masters = mastersCount();
   showModal(`<p class="r2" style="font-size:20px;text-align:center;letter-spacing:.1em">★ ゲームクリア ★</p>
-    <p style="text-align:center">F${CLEAR_FLOOR}の 魔界を とっぱした！<br>ゆうしゃ（${JOBS[S.job].n} Lv${S.hero.lv}）と なかまたちの 冒険は ここで ひとつの おわりを むかえた。</p>
+    <p style="text-align:center">F${CLEAR_FLOOR}の 魔界を とっぱした！<br>ゆうしゃ（${JOBS[S.job].n} Lv${fmtN(S.hero.lv)}）と なかまたちの 冒険は ここで ひとつの おわりを むかえた。</p>
     <ul>
-      <li>たおした まもの：${S.stats.kills.toLocaleString()}体</li>
+      <li>たおした まもの：${fmtN(S.stats.kills)}体</li>
       <li>ひらめいた技：${skills}／${Object.keys(SK).length}（ピコーン ${S.stats.sparks}回）</li>
       <li>なかま：${S.allies.length}体</li>
       <li>カード帖：${album}／${Object.keys(CARDS).length}</li>
@@ -2611,8 +2627,8 @@ function endRun(reason){
   showModal(`<p>${title}</p>
     <ul>
       <li>とっぱした階層: ${L.floors}</li>
-      <li>たおした まもの: ${L.kills}</li>
-      <li>けいけんち: ${L.exp} ／ ゴールド: ${L.gold}</li>
+      <li>たおした まもの: ${fmtN(L.kills)}</li>
+      <li>けいけんち: ${fmtN(L.exp)} ／ ゴールド: ${fmtN(L.gold)}</li>
       <li>そうび: ${L.items}こ（レア以上 ${L.rares}）</li>
       <li>カード: ${L.cards}まい ／ 青箱: ${L.boxes}こ</li>${L.rareKills ? `<li class="rr">レアモンスター: ${L.rareKills}体</li>` : ''}${L.legends ? `<li class="r5">伝説の装備: ${L.legends}こ</li>` : ''}${L.mats ? `<li>素材: ${L.mats}こ</li>` : ''}
       <li>なかま: ${L.recruits}体 ／ ひらめき: ${L.sparks}回</li>
@@ -2910,7 +2926,7 @@ function openFusePicker(baseId){
   const mats = S.allies.filter(x => x !== a && x.sp === a.sp && !inParty.has(x.id)).sort((x, y) => (x.plus || 0) - (y.plus || 0) || x.lv - y.lv);
   showModal(`<p><span class="r2">${esc(allyName(a))}</span>（${SP[a.sp].n} Lv${a.lv}）に 合成する なかま</p>
     <p class="hint">えらんだ なかまは いなくなり、そのぶん ＋ が ふえる（＋1ごとに HP・攻撃 +3%）。パーティの なかまは えらべない。</p>
-    ${mats.length ? `<div class="list" style="max-height:50vh;overflow:auto">${mats.map(m => `<button class="li" data-m="fu-pick" data-id="${m.id}"><div class="body"><div class="t"><span>${esc(allyName(m))}</span><span class="num">Lv${m.lv}</span></div><div class="d">合成すると ＋${(a.plus || 0) + 1 + (m.plus || 0)} ／ ${fuseCost(a, m).toLocaleString()}G</div></div></button>`).join('')}</div>`
+    ${mats.length ? `<div class="list" style="max-height:50vh;overflow:auto">${mats.map(m => `<button class="li" data-m="fu-pick" data-id="${m.id}"><div class="body"><div class="t"><span>${esc(allyName(m))}</span><span class="num">Lv${m.lv}</span></div><div class="d">合成すると ＋${(a.plus || 0) + 1 + (m.plus || 0)} ／ ${fmtN(fuseCost(a, m))}G</div></div></button>`).join('')}</div>`
       : `<p class="hint">同じ 種族（${SP[a.sp].n}）の 控えが いない。</p>`}
     <div class="opts"><button class="btn" data-m="close">やめる</button></div>`);
 }
@@ -2920,7 +2936,7 @@ function confirmFuse(matId){
   const cost = fuseCost(a, m);
   showModal(`<p><span class="r2">${esc(allyName(a))}</span> に <span>${esc(allyName(m))}</span>（Lv${m.lv}）を 合成します。</p>
     <p style="color:#ffb0a6">${esc(allyName(m))}は いなくなります。</p>
-    <p class="hint">費用 ${cost.toLocaleString()}G（いま ${S.gold.toLocaleString()}G）</p>
+    <p class="hint">費用 ${fmtN(cost)}G（いま ${fmtN(S.gold)}G）</p>
     <div class="opts"><button class="btn" data-m="close">やめる</button><button class="btn primary" data-m="fu-do" ${S.gold >= cost ? '' : 'disabled'}>合成する</button></div>`);
 }
 function showFuseResult(r){
@@ -2939,7 +2955,7 @@ function showFuseResult(r){
     const st = allyStats(a);
     showModal(`<p style="text-align:center">合成 せいこう！</p><canvas id="fuCv" width="24" height="24"></canvas>
       <p style="text-align:center"><span class="r2">${esc(allyName(a))}</span>（${sp.n} Lv${a.lv}）</p>
-      <p class="hint" style="text-align:center">HP ${st.hp} ／ 攻 ${st.atk} ／ 守 ${st.def}</p>
+      <p class="hint" style="text-align:center">HP ${fmtN(st.hp)} ／ 攻 ${fmtN(st.atk)} ／ 守 ${fmtN(st.def)}</p>
       <div class="opts"><button class="btn primary" data-m="close">OK</button></div>`);
   }
   const c = $('#fuCv'); if (c){ const x = c.getContext('2d'), s2 = getSpr(sp.spr); x.imageSmoothingEnabled = false; x.drawImage(s2, Math.floor((24 - s2.width) / 2), 24 - s2.height - 2); }
@@ -3097,7 +3113,7 @@ function draw(){
 /* ---------- UI rendering ---------- */
 function renderTop(){
   const jl = jobLv(S.job);
-  $('#topStat').innerHTML = `${S.cleared ? '<b>★</b> ' : ''}ゆうしゃ Lv${S.hero.lv}<br><span class="tjob">${JOBS[S.job].n} ${jl >= JOB_MAX ? '★マスター' : 'Lv' + jl}</span><br><b>${S.gold.toLocaleString()} G</b>`;
+  $('#topStat').innerHTML = `${S.cleared ? '<b>★</b> ' : ''}ゆうしゃ Lv${fmtN(S.hero.lv)}<br><span class="tjob">${JOBS[S.job].n} ${jl >= JOB_MAX ? '★マスター' : 'Lv' + jl}</span><br><b>${fmtN(S.gold)} G</b>`;
 }
 function partyRows(){
   if (mode === 'battle' && R) return R.actors;
@@ -3115,7 +3131,7 @@ function renderParty(){
     const a = rows[i];
     if (!a){ h += `<div class="win pm empty">あき</div>`; continue; }
     const lv = a.kind === 'hero' ? S.hero.lv : (allyById(a.id) || {}).lv;
-    h += `<div class="win pm" data-i="${i}"><div class="nm">${esc(a.name)}</div><div class="lv">Lv${lv} <span class="num" data-hp>${Math.ceil(a.hp)}/${a.max}</span></div><div class="bar"><b data-bar></b></div></div>`;
+    h += `<div class="win pm" data-i="${i}"><div class="nm">${esc(a.name)}</div><div class="lv">Lv${fmtN(lv)} <span class="num" data-hp>${pmHp(a)}</span></div><div class="bar"><b data-bar></b></div></div>`;
   }
   $('#party').innerHTML = h;
   updParty();
@@ -3128,9 +3144,9 @@ function updParty(){
     const bar = el.querySelector('[data-bar]');
     bar.style.width = (p * 100) + '%';
     bar.style.background = p > 0.5 ? 'var(--hp)' : p > 0.25 ? 'var(--hpw)' : 'var(--hpl)';
-    el.querySelector('[data-hp]').textContent = `${Math.ceil(a.hp)}/${a.max}`;
+    el.querySelector('[data-hp]').textContent = `${pmHp(a)}`;
     const lv = a.kind === 'hero' ? S.hero.lv : (allyById(a.id) || {}).lv;
-    el.querySelector('.lv').firstChild.nodeValue = `Lv${lv} `;
+    el.querySelector('.lv').firstChild.nodeValue = `Lv${fmtN(lv)} `;
     el.classList.toggle('dead', !!a.dead);
   });
 }
@@ -3264,7 +3280,7 @@ function panelGo(){
   return `<h3>しゅつげき</h3>
     <div class="flsel"><button class="btn sm" data-act="flJ" data-v="-10" aria-label="10階層 もどる">-10</button><button class="btn" data-act="fl-" aria-label="前の階層">◀</button><div class="big">F${f}</div><button class="btn" data-act="fl+" aria-label="次の階層">▶</button><button class="btn sm" data-act="flJ" data-v="10" aria-label="10階層 すすむ">+10</button></div>
     <div class="row flquick"><button class="btn sm" data-act="flJ" data-v="-50">-50</button><button class="btn sm" data-act="flSet" data-v="1">F1</button><label class="flin">F<input type="number" inputmode="numeric" id="flIn" data-act="flIn" min="1" max="${S.maxFloor + 1}" value="${f}" aria-label="階層を 入力"></label><button class="btn sm" data-act="flSet" data-v="max">最高</button><button class="btn sm" data-act="flJ" data-v="50">+50</button></div>
-    <p style="text-align:center">エリア「${th.n}」 ／ 敵Lv ${enemyLv(f)} ／ ゆうしゃ Lv${S.hero.lv}</p>
+    <p style="text-align:center">エリア「${th.n}」 ／ 敵Lv ${enemyLv(f)} ／ ゆうしゃ Lv${fmtN(S.hero.lv)}</p>
     <p class="hint" style="text-align:center">この階層の ひらめき率 <span style="color:var(--spark)">${(ch * 100).toFixed(1)}%</span>（格上の敵ほど ひらめきやすい）<br>到達: F${S.maxFloor}　5ウェーブ ＋ ボス で 1階層</p>
     ${S.cleared ? `<p class="r2" style="text-align:center">★ ゲームクリア済み ― F${CLEAR_FLOOR + 1}より先は やりこみの 深淵</p>` : `<p class="hint" style="text-align:center">目標：F${CLEAR_FLOOR} を とっぱすると ゲームクリア</p>`}
     <button class="btn primary" data-act="go">しゅつげき する</button>
@@ -3273,12 +3289,12 @@ function panelGo(){
     ${abyssPanel()}
     <h3>ゆうしゃ のつよさ（${JOBS[S.job].n} Lv${jobLv(S.job)}）</h3>
     <div class="kv">
-      <span><i>最大HP</i>${hs.hp}</span><span><i>攻撃力</i>${hs.atk}</span>
-      <span><i>防御力</i>${hs.def}</span><span><i>会心率</i>${hs.crit}%</span>
+      <span><i>最大HP</i>${fmtN(hs.hp)}</span><span><i>攻撃力</i>${fmtN(hs.atk)}</span>
+      <span><i>防御力</i>${fmtN(hs.def)}</span><span><i>会心率</i>${hs.crit}%</span>
       <span><i>攻撃速度</i>+${hs.aspd}%</span><span><i>技ダメージ</i>+${hs.skill}%</span>
       <span><i>技の再使用</i>-${hs.cdr}%</span><span><i>ひらめき率</i>+${hs.spark}%</span>
     </div>
-    <p class="hint">次のレベルまで ${needExp(S.hero.lv) - S.hero.exp} EXP</p>`;
+    <p class="hint">次のレベルまで ${fmtN(needExp(S.hero.lv) - S.hero.exp)} EXP</p>`;
 }
 function skDepth(id){ let d = 0, p = SK[id].parent; while (p && SK[p].tree === SK[id].tree){ d++; p = SK[p].parent; } return d; }
 function panelSkill(){
@@ -3334,7 +3350,7 @@ function panelAlly(){
     const plans = Object.keys(SP).map(bulkPlan).filter(Boolean), tot = plans.reduce((t, p) => t + p.cost, 0), cnt = plans.reduce((t, p) => t + p.mats.length, 0);
     const conf = confirmKey === 'fuseAll';
     h += `<div class="row"><button class="btn sm" data-act="grpAll" data-k="1">すべて ひらく</button><button class="btn sm" data-act="grpAll" data-k="0">すべて とじる</button>
-      ${cnt ? `<button class="btn sm ${conf ? 'danger' : ''}" data-act="fuseAll" ${S.gold >= tot ? '' : 'disabled'}>${conf ? `本当に ${cnt}体を 合成（${tot.toLocaleString()}G）` : `全種族 まとめて合成（${cnt}体・${tot.toLocaleString()}G）`}</button>` : ''}</div>
+      ${cnt ? `<button class="btn sm ${conf ? 'danger' : ''}" data-act="fuseAll" ${S.gold >= tot ? '' : 'disabled'}>${conf ? `本当に ${cnt}体を 合成（${fmtN(tot)}G）` : `全種族 まとめて合成（${cnt}体・${fmtN(tot)}G）`}</button>` : ''}</div>
       <p class="hint">まとめて合成：種族ごとに いちばん強い仲間（パーティにいれば その仲間）へ、控えの 同族を すべて 吸収させる。パーティの 仲間は 素材に ならない。</p>`;
   }
   for (const k of Object.keys(SP)){
@@ -3349,7 +3365,7 @@ function panelAlly(){
     if (open){
       const p = bulkPlan(k), conf = confirmKey === 'fuseSp' + k;
       h += `<div class="list grpbody">${p ? `<div class="row" style="align-items:center"><button class="btn sm ${conf ? 'danger' : ''}" data-act="fuseSp" data-k="${k}" ${S.gold >= p.cost ? '' : 'disabled'}>${conf ? '本当に 合成' : 'まとめて合成'}</button>
-        <span class="hint">${esc(allyName(p.base))} に ${p.mats.length}体 → ＋${p.plus}（${p.cost.toLocaleString()}G）</span></div>` : ''}${grp.map(al => allyRowCompact(al, selAlly === `r${al.id}`)).join('')}</div>`;
+        <span class="hint">${esc(allyName(p.base))} に ${p.mats.length}体 → ＋${p.plus}（${fmtN(p.cost)}G）</span></div>` : ''}${grp.map(al => allyRowCompact(al, selAlly === `r${al.id}`)).join('')}</div>`;
     }
   }
   h += `</div>`;
@@ -3362,7 +3378,7 @@ function allyRow(al, key, sel){
   return `<div class="li ${sel ? 'sel' : ''}" data-act="${inP >= 0 ? 'pslot' : 'res'}" data-i="${inP}" data-id="${al.id}" role="button" tabindex="0">
     <canvas width="16" height="16" data-icon="${sp.spr}"></canvas>
     <div class="body"><div class="t"><span>${esc(allyName(al))}<span class="tag" style="color:var(--dim)">${sp.n}</span>${al.accident ? '<span class="tag" style="color:#ff8a9a">事故</span>' : ''}</span><span class="num">Lv${al.lv}${al.capped ? '<span class="tag" style="color:var(--hpl)">限界</span>' : ''}</span></div>
-    <div class="d">${sp.role} ／ HP ${st.hp} 攻 ${st.atk} 守 ${st.def} ／ 技: ${sp.sk.n}</div>
+    <div class="d">${sp.role} ／ HP ${fmtN(st.hp)} 攻 ${fmtN(st.atk)} 守 ${fmtN(st.def)} ／ 技: ${sp.sk.n}</div>
     <div class="row" style="margin-top:4px"><button class="btn sm" data-act="fuse" data-id="${al.id}">合成</button>${inP < 0 ? `<button class="btn sm ${conf ? 'danger' : ''}" data-act="bye" data-id="${al.id}">${conf ? '本当に わかれる' : 'わかれる'}</button>` : ''}</div>
     </div></div>`;
 }
@@ -3370,7 +3386,7 @@ function allyRowCompact(al, sel){
   const st = allyStats(al), conf = confirmKey === 'bye' + al.id;
   return `<div class="li ${sel ? 'sel' : ''}" data-act="res" data-i="-1" data-id="${al.id}" role="button" tabindex="0" style="align-items:center;padding:5px 8px">
     <div class="body"><div class="t"><span>${esc(allyName(al))}${al.accident ? '<span class="tag" style="color:#ff8a9a">事故</span>' : ''}</span><span class="num">Lv${al.lv}${al.capped ? '<span class="tag" style="color:var(--hpl)">限界</span>' : ''}</span></div>
-    <div class="d num">HP ${st.hp} ／ 攻 ${st.atk} ／ 守 ${st.def}</div></div>
+    <div class="d num">HP ${fmtN(st.hp)} ／ 攻 ${fmtN(st.atk)} ／ 守 ${fmtN(st.def)}</div></div>
     <div class="row" style="flex:none;gap:4px"><button class="btn sm" data-act="fuse" data-id="${al.id}">合成</button><button class="btn sm ${conf ? 'danger' : ''}" data-act="bye" data-id="${al.id}">${conf ? '本当に' : 'わかれる'}</button></div></div>`;
 }
 function paintAllyIcons(){
@@ -3419,7 +3435,7 @@ function gearRow(it, eqKey){
     if (eqKey) h += `<button class="btn sm" data-act="unequip" data-k="${eqKey}">はずす</button>`;
     else h += `<button class="btn sm primary" data-act="equip" data-id="${it.id}">そうびする</button>`;
     h += `<button class="btn sm" data-act="lock" data-id="${it.id}">${it.lock ? '🔒 鍵をはずす' : '🔓 鍵をかける'}</button>`;
-    if (!eqKey && !it.lock){ const c = confirmKey === 'sell' + it.id; h += `<button class="btn sm ${c ? 'danger' : ''}" data-act="sell" data-id="${it.id}">${c ? '本当に売る' : `売る ${sellPrice(it)}G`}</button>`; }
+    if (!eqKey && !it.lock){ const c = confirmKey === 'sell' + it.id; h += `<button class="btn sm ${c ? 'danger' : ''}" data-act="sell" data-id="${it.id}">${c ? '本当に売る' : `売る ${fmtN(sellPrice(it))}G`}</button>`; }
     h += `</div>${invActions(it)}`;
   }
   return h + `</div></div>`;
@@ -3432,7 +3448,7 @@ function panelGear(){
     for (const k of EQ){ const it = S.equip[k];
       h += it ? gearRow(it, k) : `<div class="li gr" style="cursor:default"><div class="body"><div class="t"><span><span class="hint">${SLOTN[k]}</span> <span class="hint">― なし ―</span></span></div></div></div>`; }
     const hs = heroStats();
-    h += `</div><p class="hint">いまの 能力：HP ${hs.hp} ／ 攻撃力 ${hs.atk} ／ 防御力 ${hs.def} ／ 会心 ${hs.crit}%</p>
+    h += `</div><p class="hint">いまの 能力：HP ${fmtN(hs.hp)} ／ 攻撃力 ${fmtN(hs.atk)} ／ 防御力 ${fmtN(hs.def)} ／ 会心 ${hs.crit}%</p>
       <div class="row"><button class="btn" data-act="best">おすすめ装備</button></div>`;
     return h;
   }
@@ -3453,7 +3469,7 @@ function panelGear(){
   // inventory
   const confW = confirmKey === 'sellWeak';
   h += `<div class="row"><button class="btn sm" data-act="best">おすすめ装備</button>
-    <button class="btn sm ${confW ? 'danger' : ''}" data-act="sellWeak" ${weak.length ? '' : 'disabled'}>${confW ? `本当に ${weak.length}こ 売る（${wG.toLocaleString()}G）` : `弱い装備を まとめて売る（${weak.length}）`}</button></div>
+    <button class="btn sm ${confW ? 'danger' : ''}" data-act="sellWeak" ${weak.length ? '' : 'disabled'}>${confW ? `本当に ${weak.length}こ 売る（${fmtN(wG)}G）` : `弱い装備を まとめて売る（${weak.length}）`}</button></div>
     <p class="hint">「弱い装備」＝ いまの装備以下の もの（ユニーク・セットも ふくむ）。鍵つき・伝説・カード入り・まだ 力を 抽出していない ユニークは 売らない。</p>
     <label class="toggle"><span>拾った 弱い装備を 自動で 売る</span><input type="checkbox" data-act="autoSell" ${S.autoSellWeak ? 'checked' : ''}></label>`;
   const cnt = sl => S.inv.filter(it => sl === 'all' || it.slot === sl).length;
@@ -3568,7 +3584,7 @@ function panelTown(){
         const c = craftCost(craftSlot, t), mk = AREA_MAT[t];
         const ok = S.mats[mk] >= c.mat && S.gold >= c.gold && (!craftStar || S.mats.star > 0);
         h += `<div class="li" style="cursor:default;align-items:center"><div class="body"><div class="t"><span>${THEMES[t].n}の素材で ${SLOTN[craftSlot]}</span><span class="num">iLv${craftIlv(t)}${CRAFT_CAP[t] < 9999 ? `<span class="hint">（上限 ${CRAFT_CAP[t] + 2 + craftBonusLv()}）</span>` : ''}</span></div>
-          <div class="d">${MATS[mk].n} ${S.mats[mk]}/${c.mat} ／ ${c.gold.toLocaleString()}G${craftStar ? ` ／ ほしのかけら ${S.mats.star}/1` : ''}</div></div>
+          <div class="d">${MATS[mk].n} ${S.mats[mk]}/${c.mat} ／ ${fmtN(c.gold)}G${craftStar ? ` ／ ほしのかけら ${S.mats.star}/1` : ''}</div></div>
           <button class="btn sm" data-act="craft" data-t="${t}" ${ok ? '' : 'disabled'} style="flex:none">つくる</button></div>`;
       }
       h += `</div>`;
@@ -3581,7 +3597,7 @@ function panelTown(){
         <div class="row">${SLOTS.map(sl => `<button class="btn sm" data-act="cslot" data-k="${sl}" style="${craftSlot === sl ? 'border-color:var(--gold);color:var(--gold)' : ''}">${SLOTN[sl]}${own.has(sl) ? '✓' : ''}</button>`).join('')}</div>
         <p class="hint">✓ は もっている 部位。（2）${SETS[craftSet].b[2]} ／（4）${SETS[craftSet].b[4]} ／（6）${SETS[craftSet].b[6]}</p>
         <div class="li" style="cursor:default;align-items:center"><div class="body"><div class="t"><span class="r4">${SETS[craftSet].pre}${SET_PART[craftSlot]}</span><span class="num">iLv${craftIlv(c.t)}</span></div>
-          <div class="d">ほしのかけら ${S.mats.star}/${c.star} ／ ${MATS[mk].n} ${S.mats[mk]}/${c.mat} ／ ${c.gold.toLocaleString()}G ／ 成功率 ${Math.round(craftRate() * 100)}%</div></div>
+          <div class="d">ほしのかけら ${S.mats.star}/${c.star} ／ ${MATS[mk].n} ${S.mats[mk]}/${c.mat} ／ ${fmtN(c.gold)}G ／ 成功率 ${Math.round(craftRate() * 100)}%</div></div>
           <button class="btn sm" data-act="craftSet" ${ok ? '' : 'disabled'} style="flex:none">つくる</button></div>`;
     }
     if (craftMode === 'reforge'){
@@ -3590,7 +3606,7 @@ function panelTown(){
       if (sel){
         const c = reforgeCost(sel);
         h += `<div class="li u${sel.rar}" style="cursor:default"><div class="body"><div class="t"><span class="r${sel.rar}">${esc(sel.name)}</span><span class="num">iLv${sel.ilv}</span></div>
-          <div class="d">費用：${c.gold.toLocaleString()}G ／ ${MATS[c.mk].n} ${S.mats[c.mk]}/${c.mat}</div></div></div><div class="list">`;
+          <div class="d">費用：${fmtN(c.gold)}G ／ ${MATS[c.mk].n} ${S.mats[c.mk]}/${c.mat}</div></div></div><div class="list">`;
         sel.aff.forEach((a, i) => {
           const lockd = sel.rfi != null && sel.rfi !== i, ok = !lockd && S.gold >= c.gold && S.mats[c.mk] >= c.mat;
           h += `<div class="li" style="cursor:default;align-items:center"><div class="body"><div class="t"><span>${AFF[a.k].n} ${AFF[a.k].f(a.v)}${a.q ? ' ' + qStars(a.q) : ''}</span>${sel.rfi === i ? '<span class="tag r2">作り直し中</span>' : ''}</div></div>
@@ -3612,14 +3628,14 @@ function panelTown(){
     for (const k of Object.keys(MATS)){
       const key = 'mat:' + k, left2 = MAT_STOCK - (S.market.bought[key] || 0);
       h += `<div class="li" style="cursor:default;align-items:center"><div class="body"><div class="t"><span>${MATS[k].n}</span><span class="num">${arrow(key)}</span></div>
-        <div class="d">買う ${mktBuy(key)}G（のこり${left2}） ／ 売る ${mktSell(key)}G ／ もっている ${S.mats[k]}</div></div>
+        <div class="d">買う ${fmtN(mktBuy(key))}G（のこり${left2}） ／ 売る ${fmtN(mktSell(key))}G ／ もっている ${S.mats[k]}</div></div>
         <div class="row" style="flex:none"><button class="btn sm" data-act="mbuy" data-k="${key}" ${S.gold >= mktBuy(key) && left2 > 0 ? '' : 'disabled'}>買う</button><button class="btn sm" data-act="msell" data-k="${key}" ${S.mats[k] ? '' : 'disabled'}>売る</button></div></div>`;
     }
     h += `</div><h3>きょうの カード</h3><div class="list">`;
     for (const k of mktCardsToday()){
       const key = 'card:' + k, sold = S.market.bought[key];
       h += `<div class="li" style="cursor:default;align-items:center"><div class="body"><div class="t"><span class="${cardCls(k)}">${CARDS[k].n}</span><span class="num">${arrow(key)}</span></div>
-        <div class="d">${CARDS[k].d} ／ ${mktBuy(key)}G</div></div>
+        <div class="d">${CARDS[k].d} ／ ${fmtN(mktBuy(key))}G</div></div>
         <button class="btn sm" data-act="mbuy" data-k="${key}" style="flex:none" ${!sold && S.gold >= mktBuy(key) ? '' : 'disabled'}>${sold ? '売りきれ' : '買う'}</button></div>`;
     }
     h += `</div><p class="hint">カードは カードタブで その日の 相場で 売れる。</p>`;
@@ -3631,7 +3647,7 @@ function panelTown(){
       if (r >= refCap()) return `<div class="li u${it.rar}" style="cursor:default"><div class="body"><div class="t"><span class="r${it.rar}">${esc(it.name)}</span><span class="r2">最大</span></div><div class="d">${where}</div></div></div>`;
       const rate = refRate(r), cost = refCost(it), conf = confirmKey === 'ref' + it.id;
       return `<div class="li u${it.rar}" style="cursor:default;align-items:center"><div class="body"><div class="t"><span class="r${it.rar}">${esc(it.name)}</span><span class="num">+${r} → +${r + 1}<span class="hint">（×${REF_MUL[r]} → ×${REF_MUL[r + 1]}）</span></span></div>
-        <div class="d">${where}${it.base.atk || it.base.def || it.base.hp ? '' : ' ／ <span style="color:#ffb0a6">基本性能なし（精錬しても 上がらない）</span>'} ／ 成功率 <span style="${rate < 1 ? 'color:#ffb0a6' : ''}">${Math.round(rate * 100)}%</span> ／ ${cost}G</div></div>
+        <div class="d">${where}${it.base.atk || it.base.def || it.base.hp ? '' : ' ／ <span style="color:#ffb0a6">基本性能なし（精錬しても 上がらない）</span>'} ／ 成功率 <span style="${rate < 1 ? 'color:#ffb0a6' : ''}">${Math.round(rate * 100)}%</span> ／ ${fmtN(cost)}G</div></div>
         <button class="btn sm ${conf ? 'danger' : ''}" data-act="refine" data-id="${it.id}" style="flex:none" ${S.gold >= cost ? '' : 'disabled'}>${conf ? '本当に<br>精錬' : '精錬'}</button></div>`;
     };
     h += `<h3>そうび中</h3><div class="list">${equipped().map(it => row(it, SLOTN[it.slot])).join('') || '<p class="hint">なにも そうびしていない。</p>'}</div>`;
@@ -3645,7 +3661,7 @@ function panelTown(){
       const F2 = FAC[k], l = facLv(k), maxed = l >= F2.max, cost = maxed ? 0 : F2.cost[l];
       h += `<div class="li" style="cursor:default;align-items:center"><div class="body"><div class="t"><span>${F2.n}</span><span class="num">${maxed ? '<span class="r2">最大</span>' : `Lv${l}/${F2.max}`}</span></div>
         <div class="d">いま：${F2.d(l)}${maxed ? '' : ` → ${F2.d(l + 1)}`}</div></div>
-        ${maxed ? '' : `<button class="btn sm" data-act="facUp" data-k="${k}" style="flex:none" ${S.gold >= cost ? '' : 'disabled'}>広げる<br>${cost.toLocaleString()}G</button>`}</div>`;
+        ${maxed ? '' : `<button class="btn sm" data-act="facUp" data-k="${k}" style="flex:none" ${S.gold >= cost ? '' : 'disabled'}>広げる<br>${fmtN(cost)}G</button>`}</div>`;
     }
     h += `</div>`;
   }
@@ -3654,11 +3670,11 @@ function panelTown(){
     if (!S.stall.length) h += `<p class="hint">まだ 何も ならべていない。</p>`;
     S.stall.forEach((st, i) => {
       const nm = st.kind === 'item' ? `<span class="r${st.item.rar}">${esc(st.item.name)}</span>` : `<span class="${cardCls(st.key)}">${CARDS[st.key].n}</span>`;
-      h += `<div class="li" style="cursor:default;align-items:center"><div class="body"><div class="t"><span>${nm}</span><span class="num r2">${st.price}G</span></div>
-        <div class="d">相場の めやす ${stallValue(st)}G</div></div><button class="btn sm" data-act="unstall" data-i="${i}" style="flex:none">さげる</button></div>`;
+      h += `<div class="li" style="cursor:default;align-items:center"><div class="body"><div class="t"><span>${nm}</span><span class="num r2">${fmtN(st.price)}G</span></div>
+        <div class="d">相場の めやす ${fmtN(stallValue(st))}G</div></div><button class="btn sm" data-act="unstall" data-i="${i}" style="flex:none">さげる</button></div>`;
     });
     h += `</div><div class="row"><button class="btn" data-act="stallAdd" ${S.stall.length < stallMax() ? '' : 'disabled'}>品物を ならべる</button></div>`;
-    if (S.stallLog.length) h += `<h3>売れたもの</h3><div class="list">${S.stallLog.map(l => `<div class="hint">${esc(l.n)} … <span class="r2">${l.price}G</span></div>`).join('')}</div>`;
+    if (S.stallLog.length) h += `<h3>売れたもの</h3><div class="list">${S.stallLog.map(l => `<div class="hint">${esc(l.n)} … <span class="r2">${fmtN(l.price)}G</span></div>`).join('')}</div>`;
   }
   return h;
 }
@@ -3669,8 +3685,8 @@ function openStallPicker(){
   const cards = Object.keys(S.cards).filter(k => S.cards[k] > 0);
   showModal(`<p>露店に ならべる 品物</p>
     <div class="list" style="max-height:50vh;overflow:auto">
-      ${cards.map(k => `<button class="li" data-m="st-pick" data-kind="card" data-k="${k}"><div class="body"><div class="t"><span class="${cardCls(k)}">${CARDS[k].n}</span><span class="num">×${S.cards[k]}</span></div><div class="d">相場 ${Math.round(mktBuy('card:' + k) * 0.9)}G</div></div></button>`).join('')}
-      ${items.map(it => `<button class="li u${it.rar}" data-m="st-pick" data-kind="item" data-k="${it.id}"><div class="body"><div class="t"><span class="r${it.rar}">${esc(it.name)}</span><span class="num">iLv${it.ilv}</span></div><div class="d">相場 ${sellPrice(it) * 3}G</div></div></button>`).join('')}
+      ${cards.map(k => `<button class="li" data-m="st-pick" data-kind="card" data-k="${k}"><div class="body"><div class="t"><span class="${cardCls(k)}">${CARDS[k].n}</span><span class="num">×${S.cards[k]}</span></div><div class="d">相場 ${fmtN(Math.round(mktBuy('card:' + k) * 0.9))}G</div></div></button>`).join('')}
+      ${items.map(it => `<button class="li u${it.rar}" data-m="st-pick" data-kind="item" data-k="${it.id}"><div class="body"><div class="t"><span class="r${it.rar}">${esc(it.name)}</span><span class="num">iLv${it.ilv}</span></div><div class="d">相場 ${fmtN(sellPrice(it) * 3)}G</div></div></button>`).join('')}
       ${!items.length && !cards.length ? '<p class="hint">ならべられる品物が ない。</p>' : ''}
     </div><div class="opts"><button class="btn" data-m="close">やめる</button></div>`);
 }
@@ -3679,8 +3695,8 @@ function openPricePicker(kind, k){
   if (kind === 'item' && !st.item) return;
   stallPick = st;
   const v = stallValue(st);
-  showModal(`<p>${kind === 'card' ? CARDS[k].n : esc(st.item.name)} の ねだん</p><p class="hint">相場の めやす ${v}G。高くするほど 売れるまで 時間が かかる。</p>
-    <div class="list">${PRICE_TIERS.map((t, i) => `<button class="li" data-m="st-price" data-i="${i}"><div class="body"><div class="t"><span>${t.n}</span><span class="num r2">${Math.round(v * t.m)}G</span></div></div></button>`).join('')}</div>
+  showModal(`<p>${kind === 'card' ? CARDS[k].n : esc(st.item.name)} の ねだん</p><p class="hint">相場の めやす ${fmtN(v)}G。高くするほど 売れるまで 時間が かかる。</p>
+    <div class="list">${PRICE_TIERS.map((t, i) => `<button class="li" data-m="st-price" data-i="${i}"><div class="body"><div class="t"><span>${t.n}</span><span class="num r2">${fmtN(Math.round(v * t.m))}G</span></div></div></button>`).join('')}</div>
     <div class="opts"><button class="btn" data-m="close">やめる</button></div>`);
 }
 function panelCards(){
@@ -3705,7 +3721,7 @@ function panelCards(){
     h += `<div class="li" style="cursor:default;align-items:center"><canvas width="16" height="16" data-icon="${SP[k].spr}"></canvas><div class="body">
       <div class="t"><span class="${cardCls(k)}">${CARDS[k].n}<span class="tag" style="color:var(--dim)">${CARDS[k].type === 'weapon' ? '武器用' : '防具用'}</span></span><span class="num">×${S.cards[k]}</span></div>
       <div class="d">${CARDS[k].d}</div></div>
-      <button class="btn sm ${conf ? 'danger' : ''}" data-act="csell" data-k="${k}" style="flex:none">${conf ? '本当に' : `売る<br>${mktSell('card:' + k)}G`}</button></div>`;
+      <button class="btn sm ${conf ? 'danger' : ''}" data-act="csell" data-k="${k}" style="flex:none">${conf ? '本当に' : `売る<br>${fmtN(mktSell('card:' + k))}G`}</button></div>`;
   }
   h += `</div><h3>青箱</h3>
     <div class="boxrow"><span class="bx">■ ×${S.boxes}</span>
@@ -3761,7 +3777,7 @@ async function importSave(text){
 async function openSaveOut(){
   const code = await exportSave(), date = new Date().toISOString().slice(0, 10);
   showModal(`<p>セーブの 書き出し</p>
-    <p class="hint">ゆうしゃ Lv${S.hero.lv} ／ 最高 F${S.maxFloor} ／ ${code.length.toLocaleString()}文字。この 文字列を まるごと メモアプリなどに 保存しておこう。</p>
+    <p class="hint">ゆうしゃ Lv${fmtN(S.hero.lv)} ／ 最高 F${S.maxFloor} ／ ${fmtN(code.length)}文字。この 文字列を まるごと メモアプリなどに 保存しておこう。</p>
     <textarea id="saveCode" readonly style="width:100%;height:120px;font:11px monospace;background:#000;color:var(--fg,#eee);border:1px solid #3a3c46;border-radius:4px;box-sizing:border-box;word-break:break-all">${code}</textarea>
     <div class="opts" style="flex-wrap:wrap"><button class="btn" data-m="saveCopy">コピー</button><button class="btn" data-m="saveFile" data-name="pikon-save-${date}.txt">ファイルで 保存</button><button class="btn primary" data-m="close">とじる</button></div>
     <p class="hint" id="saveMsg"></p>`);
@@ -3926,7 +3942,7 @@ $('#modal').addEventListener('click', e => {
     const txt = $('#saveCodeIn').value;
     importSave(txt).then(obj => {
       loadSave({save: obj}); save(); hideModal(); mode = 'camp'; R = null; TAB = 'go';
-      renderParty(); renderCamp(); updSpdBtn(); updNextBtn(); se('clear'); toast(`読み込んだ！ ゆうしゃ Lv${S.hero.lv} ／ 最高 F${S.maxFloor}`);
+      renderParty(); renderCamp(); updSpdBtn(); updNextBtn(); se('clear'); toast(`読み込んだ！ ゆうしゃ Lv${fmtN(S.hero.lv)} ／ 最高 F${S.maxFloor}`);
     }, err => { $('#saveMsg').innerHTML = '<span style="color:#ffb0a6">読み込めなかった。文字列が 欠けていないか たしかめてね。</span>'; });
     return; }
   if (m === 'ms-filt'){ msFilt = b.dataset.v; openMslot(b.dataset.c); $('#mbox').scrollTop = 0; return; }
