@@ -118,6 +118,11 @@ button{font:inherit;color:inherit}
 .row{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
 .flsel{display:flex;align-items:center;justify-content:center;gap:14px}
 .flsel .big{font-size:30px;min-width:4ch;text-align:center;font-variant-numeric:tabular-nums}
+.flsel{gap:10px}
+.flquick{justify-content:center;gap:6px}
+.flin{display:flex;align-items:center;gap:2px;font-size:13px}
+.flin input{width:5.5ch;font:inherit;font-size:16px;color:var(--edge);background:#0e1018;border:1px solid var(--dim);border-radius:4px;padding:3px 4px;text-align:center;-moz-appearance:textfield}
+.flin input::-webkit-inner-spin-button,.flin input::-webkit-outer-spin-button{-webkit-appearance:none;margin:0}
 .kv{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:2px 16px;font-size:13px}
 .kv span{display:flex;justify-content:space-between;gap:6px;font-variant-numeric:tabular-nums}
 .kv span i{font-style:normal;color:var(--dim)}
@@ -2478,11 +2483,13 @@ function gainItem(it, e){
 function gainExp(x){
   R.loot.exp += x;
   S.hero.exp += x;
-  while (S.hero.exp >= needExp(S.hero.lv)){
-    S.hero.exp -= needExp(S.hero.lv); S.hero.lv++;
+  // deep floors can give many levels per kill: count them first, then recalc stats once
+  let ups = 0;
+  while (S.hero.exp >= needExp(S.hero.lv) && ups < 200000){ S.hero.exp -= needExp(S.hero.lv); S.hero.lv++; ups++; }
+  if (ups){
     const old = R.hs; R.hs = heroStats();
     const h = R.actors[0]; h.max = R.hs.hp; h.def = R.hs.def; if (!h.dead) h.hp = Math.min(h.max, h.hp + (R.hs.hp - old.hp));
-    log(`ゆうしゃは レベル${S.hero.lv}に あがった！`); se('lvup');
+    log(`ゆうしゃは レベル${S.hero.lv}に あがった！${ups > 1 ? `（+${ups}）` : ''}`); se('lvup');
   }
   for (const a of R.actors){
     if (a.kind !== 'ally' || a.dead) continue;
@@ -3255,7 +3262,8 @@ function panelGo(){
   S.selFloor = f;
   const ch = sparkChance(f);
   return `<h3>しゅつげき</h3>
-    <div class="flsel"><button class="btn" data-act="fl-" aria-label="前の階層">◀</button><div class="big">F${f}</div><button class="btn" data-act="fl+" aria-label="次の階層">▶</button></div>
+    <div class="flsel"><button class="btn sm" data-act="flJ" data-v="-10" aria-label="10階層 もどる">-10</button><button class="btn" data-act="fl-" aria-label="前の階層">◀</button><div class="big">F${f}</div><button class="btn" data-act="fl+" aria-label="次の階層">▶</button><button class="btn sm" data-act="flJ" data-v="10" aria-label="10階層 すすむ">+10</button></div>
+    <div class="row flquick"><button class="btn sm" data-act="flJ" data-v="-50">-50</button><button class="btn sm" data-act="flSet" data-v="1">F1</button><label class="flin">F<input type="number" inputmode="numeric" id="flIn" data-act="flIn" min="1" max="${S.maxFloor + 1}" value="${f}" aria-label="階層を 入力"></label><button class="btn sm" data-act="flSet" data-v="max">最高</button><button class="btn sm" data-act="flJ" data-v="50">+50</button></div>
     <p style="text-align:center">エリア「${th.n}」 ／ 敵Lv ${enemyLv(f)} ／ ゆうしゃ Lv${S.hero.lv}</p>
     <p class="hint" style="text-align:center">この階層の ひらめき率 <span style="color:var(--spark)">${(ch * 100).toFixed(1)}%</span>（格上の敵ほど ひらめきやすい）<br>到達: F${S.maxFloor}　5ウェーブ ＋ ボス で 1階層</p>
     ${S.cleared ? `<p class="r2" style="text-align:center">★ ゲームクリア済み ― F${CLEAR_FLOOR + 1}より先は やりこみの 深淵</p>` : `<p class="hint" style="text-align:center">目標：F${CLEAR_FLOOR} を とっぱすると ゲームクリア</p>`}
@@ -3948,6 +3956,8 @@ $('#panel').addEventListener('click', e => {
   switch (act){
     case 'fl-': S.selFloor = Math.max(1, S.selFloor - 1); se('ui'); break;
     case 'fl+': S.selFloor = Math.min(S.maxFloor + 1, S.selFloor + 1); se('ui'); break;
+    case 'flJ': S.selFloor = clamp(S.selFloor + +b.dataset.v, 1, S.maxFloor + 1); se('ui'); break;
+    case 'flSet': S.selFloor = b.dataset.v === 'max' ? Math.max(1, S.maxFloor) : 1; se('ui'); break;
     case 'go': if (!S.seenCoach){ coach(); return; } startRun(S.selFloor); return;
     case 'manualSave': manualSave(); break;
     case 'dmgNum': S.dmgNum = b.dataset.k; G.floaters = []; se('ui'); save(); break;
@@ -4097,6 +4107,7 @@ $('#panel').addEventListener('click', e => {
 $('#panel').addEventListener('change', e => {
   const t = e.target, act = t.dataset.act;
   if (act === 'next'){ S.autoNext = t.checked; updNextBtn(); }
+  if (act === 'flIn'){ const v = Math.floor(+t.value); S.selFloor = clamp(isFinite(v) && v > 0 ? v : 1, 1, S.maxFloor + 1); renderCamp(); }
   if (act === 'autoRec') S.autoRecruit = t.checked;
   if (act === 'autoSell'){ S.autoSellWeak = t.checked; save(); renderCamp(); }
   if (act === 'star'){ craftStar = t.checked; renderCamp(); }
@@ -4104,7 +4115,7 @@ $('#panel').addEventListener('change', e => {
   save();
 });
 $('#panel').addEventListener('input', e => { if (e.target.dataset.act === 'vol'){ S.snd.vol = +e.target.value; auVol(); } });
-$('#panel').addEventListener('keydown', e => { if ((e.key === 'Enter' || e.key === ' ') && e.target.matches('[role=button]')){ e.preventDefault(); e.target.click(); } });
+$('#panel').addEventListener('keydown', e => { if (e.key === 'Enter' && e.target.id === 'flIn'){ e.target.blur(); return; } if ((e.key === 'Enter' || e.key === ' ') && e.target.matches('[role=button]')){ e.preventDefault(); e.target.click(); } });
 
 function coach(){
   showModal(`<p>ぼうけんの すすめかた</p>
