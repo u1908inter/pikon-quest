@@ -2836,7 +2836,19 @@ function showTrueClear(){
       <li>称号：${abyssTitle(abyssLv())}</li>
     </ul>
     <p>称号「<span class="rainbow">深淵の 果てを 見た者</span>」を えた。</p>
-    <p class="hint">それでも 深淵は、まだ 口を ひらいている。<br>F${TRUE_CLEAR_FLOOR + 1} から 先も、この まま もぐり つづけられる。</p>
+    <div class="win" style="padding:10px 12px;font-size:13px;line-height:1.7">
+      <p class="hint" style="margin:0 0 6px">── ${DEV_NAME} より、すこし ないしょの 話 ──</p>
+      <p style="margin:0 0 6px">じつは この 世界の 数字には 限界が ある。<br>コンピューターが あつかえる 数は、およそ 1.8×10の308乗 まで。<br>それを こえないように、深淵には こっそり 天井を つけてある。</p>
+      <ul style="margin:0 0 6px;font-size:13px">
+        <li>F13500 あたり：もらえる ゴールドが 頭打ちに なる</li>
+        <li>F13800 あたり：まものの 攻撃力が 10の150乗で 止まる</li>
+        <li>F16800 あたり：もらえる 経験値が 頭打ちに なる</li>
+        <li>F23150 あたり：まものの HPが 10の300乗で 止まる</li>
+      </ul>
+      <p style="margin:0 0 6px">そこから 先は、どこまで 行っても 同じ 強さの 深淵が つづくだけ。<br>あたらしい 特典や 仕掛けも、もう ない。</p>
+      <p style="margin:0">階層の 数字を 正しく 数えられるのは F9,007,199,254,740,991（約9000兆階）まで。<br>×64倍速で 1階 5秒 としても、たどりつくには 14億年 くらい かかる 計算です。</p>
+    </div>
+    <p>ここで 冒険を おえるのも、<br>天井を 見に もぐり つづけるのも、あなたの 自由。</p>
     <p style="text-align:center">ここまで 遊んでくれて、ほんとうに ありがとう。</p>
     <div class="opts"><button class="btn primary" data-m="trueClearOk">この先へ</button></div>`);
 }
