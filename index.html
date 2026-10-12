@@ -3579,7 +3579,12 @@ function panelGo(){
       <span><i>防御力</i>${fmtN(hs.def)}</span><span><i>会心率</i>${hs.crit}%</span>
       <span><i>攻撃速度</i>+${hs.aspd}%</span><span><i>技ダメージ</i>+${hs.skill}%</span>
       <span><i>技の再使用</i>-${hs.cdr}%</span><span><i>ひらめき率</i>+${hs.spark}%</span>
+      ${(() => { const pw = hs.pw, ev = pw.evade || 0, cut = pw.dmgCut || 0, ally = Math.round((1 - (pw.cover ? 0.8 : 1) * (1 - Math.min(100, pw.allyGuard || 0) / 100)) * 100);
+        return `<span><i>会心の倍率</i>×${(pw.critMul || 1.8).toFixed(1)}</span><span><i>回避率</i>${ev >= 100 ? '100%（すべて）' : ev + '%'}</span>
+      <span><i>受けるダメージ</i>${cut ? '-' + cut + '%' : '±0%'}</span><span><i>仲間の 被ダメ</i>${ally ? '-' + ally + '%' : '±0%'}</span>
+      ${pw.reflect ? `<span><i>はね返し</i>${pw.reflect}%</span>` : ''}${pw.ls ? `<span><i>HP吸収</i>${pw.ls}%</span>` : ''}`; })()}
     </div>
+    <p class="hint">「受けるダメージ」は 防御力とは 別の 軽減（防御力でも さらに 減る）。回避率は 100% で すべての 攻撃を かわす。</p>
     <p class="hint">次のレベルまで ${fmtN(needExp(S.hero.lv) - S.hero.exp)} EXP</p>`;
 }
 function skDepth(id){ let d = 0, p = SK[id].parent; while (p && SK[p].tree === SK[id].tree){ d++; p = SK[p].parent; } return d; }
