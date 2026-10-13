@@ -3579,6 +3579,11 @@ function updTabBadges(){
 /* after a wipe: what would make you stronger right now (at most two) */
 function wipeTips(){
   const t = [];
+  if (wipeF >= 150){   // the deep wall: raw stats stop keeping up — point at the two ways past it, without spelling them out
+    const pw = heroStats().pw;
+    if ((pw.evade || 0) < 100) t.push({tab:'job', s:'深い階では 敵の攻撃を「かわす」のが カギ。回避の アビリティや カードを 重ねていくと、やがて 攻撃が 当たらなくなる'});
+    if (!pw.execute && !pw.zantetsu) t.push({tab:'gear', s:'敵の HPが 大きすぎる 階では、「会心の一撃で 一気に 倒す」セット装備や アビリティが 効く'});
+  }
   if (S.inv.some(it => eqTarget(it) && itemScore(it) > itemScore(S.equip[eqTarget(it)])))
     t.push({tab:'gear', s:'持ち物に 今より 強い装備が ある。装備タブの「おすすめ装備」で つけかえよう'});
   if (S.party.some(x => !x) && S.allies.some(a => !S.party.includes(a.id)))
