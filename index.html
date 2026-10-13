@@ -115,6 +115,9 @@ button{font:inherit;color:inherit}
 .tabs{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:6px}
 .tabs button{padding:7px 0;font-size:13px}
 .tabs button[aria-selected="true"]{border-color:var(--gold);color:var(--gold)}
+.tabs .bdg{color:#ff6a8a;margin-left:2px;font-size:12px}
+.tips{display:flex;flex-direction:column;gap:6px;margin-top:4px}
+.tips .btn{text-align:left;font-size:13px;line-height:1.5;white-space:normal}
 .tabs button[aria-selected="true"]::before{content:'▶';font-size:9px;margin-right:2px;vertical-align:2px}
 .panel{padding:12px 12px 14px;display:flex;flex-direction:column;gap:12px;min-width:0}
 .panel h3{margin:0;font-size:13px;font-weight:400;color:var(--gold);letter-spacing:.12em}
@@ -1141,7 +1144,7 @@ function freshSave(){
     mats:{iron:0, leaf:0, mithril:0, crystal:0, star:0}, craft:{m:0},
     market:{day:'', bought:{}}, dayOff:0, stall:[], stallT:0, stallLog:[], cmdKnown:{},
     fac:{bag:0, stall:0, forge:0, inn:0, party:0, clock:0}, charmNext:{}, stats2:{refines:0, broken:0},
-    seenCoach:false, seenHelp:{}, helpVer:2, abyssBoss:{}, autoDive:false, unlockSeen:0, trueClear:null, devRoom:null, guard:0, autoRecruit:false, dmgNum:'all', autoSellWeak:false,
+    seenCoach:false, seenHelp:{}, helpVer:2, abyssBoss:{}, autoDive:false, unlockSeen:0, trueClear:null, devRoom:null, newMark:{}, guard:0, autoRecruit:false, dmgNum:'all', autoSellWeak:false,
     stats:{kills:0, sparks:0, recruits:0, cards:0},
   };
 }
@@ -2605,6 +2608,7 @@ function gainItem(it, e){
     return;
   }
   addInv(it); R.loot.items++;
+  if (eqTarget(it) && itemScore(it) > itemScore(S.equip[eqTarget(it)])) setNew('gear');
   if (it.rar >= 2){
     R.loot.rares++;
     G.fx.push({k:'beam', x:e.x, y:e.y, life:it.rar >= 3 ? 1.3 : 0.9, col:RAR_COL[it.rar]});
@@ -2892,7 +2896,9 @@ function afterClear(){
     playSong(fieldSong(f)); renderParty();
   } else endRun('clear');
 }
+let wipeF = 1;
 function endRun(reason){
+  if (R) wipeF = R.floor;
   if (reason === 'dead' && S.autoDive && unlocked('autoDive')){   // 自動 深層ぬけ: back off 10 floors and go again
     const f = Math.max(1, R.floor - 10); save(); R = null;
     startRun(f); log(`自動 深層ぬけ：F${f} から 出撃しなおした`); return;
@@ -2911,7 +2917,10 @@ function endRun(reason){
       <li>なかま: ${L.recruits}体 ／ ひらめき: ${L.sparks}回</li>
     </ul>
     <p class="hint">拾ったものは すべて 持ち帰った。</p>
-    <div class="opts"><button class="btn primary" data-m="camp">拠点へ</button></div>`);
+    ${reason === 'dead' ? (() => { const tips = wipeTips(); return `<p class="r2" style="margin-top:4px">つよくなる ヒント</p><div class="tips">${tips.length
+      ? tips.map(x => `<button class="btn" data-m="goTab" data-tab="${x.tab}">▶ ${x.s}</button>`).join('')
+      : '<p class="hint">ひとつ前の 階で レベルを 上げてから、もう一度 挑もう。</p>'}</div>`; })() : ''}
+    <div class="opts">${reason === 'dead' && wipeF > 1 ? `<button class="btn" data-m="retryPrev" data-f="${wipeF - 1}">F${wipeF - 1} から 出撃</button>` : ''}<button class="btn primary" data-m="camp">拠点へ</button></div>`);
   R = null; mode = 'camp';
 }
 function toCamp(){
@@ -2924,6 +2933,7 @@ function checkJobUnlocks(){
   if (!S.jobsOpen) S.jobsOpen = [];
   const fresh = Object.keys(JOBS).filter(k => JOBS[k].unlock && jobUnlocked(k) && !S.jobsOpen.includes(k));
   S.jobsOpen.push(...fresh);
+  if (fresh.length) setNew('job');
   return fresh;
 }
 function jobUnlockNotice(){
@@ -2948,7 +2958,7 @@ function useSkill(i, manual){
   if (kids.length && Math.random() < sparkChance(R.floor)){
     const nk = pick(kids);
     S.skills[nk] = {m: R.hs.pw.sekaiju ? 300 : 0}; S.stats.sparks++; R.loot.sparks++; if (Object.keys(S.skills).length >= 10) track('spark-10', '技を10個ひらめいた');
-    const empty = S.slots.indexOf(null); if (empty >= 0) S.slots[empty] = nk;
+    const empty = S.slots.indexOf(null); if (empty >= 0) S.slots[empty] = nk; setNew('skill');
     R.freeze = 1.3; R.pending = nk;
     if (R.hs.pw.kanki) for (const a of R.actors) if (!a.dead) a.hp = a.max;
     flash(0.8); se('pikon');
@@ -3242,6 +3252,7 @@ function acceptRecruit(spk, f){
   const al = newAlly(spk, f);
   S.allies.push(al); S.stats.recruits++;
   if (R) R.loot.recruits++;
+  if (!S.party.includes(null)) setNew('ally');
   log(`${al.name}（${SP[spk].n}）が なかまに くわわった！`);
   const slot = S.party.indexOf(null);
   if (slot >= 0){
@@ -3556,7 +3567,32 @@ function maybeHelp(){
   showModal(`<p class="r2">${h.t}</p><ul>${h.b.map(x => `<li>${x}</li>`).join('')}</ul>
     <div class="opts"><button class="btn primary" data-m="close">わかった</button></div>`);
 }
+/* 「！」marks on camp tabs: set when something new shows up, cleared when that tab is opened */
+function setNew(tab){ if (!S.newMark) S.newMark = {}; S.newMark[tab] = true; updTabBadges(); }
+function updTabBadges(){
+  document.querySelectorAll('#tabs [data-tab]').forEach(b => {
+    const on = !!(S.newMark && S.newMark[b.dataset.tab]); let bd = b.querySelector('.bdg');
+    if (on && !bd){ bd = document.createElement('span'); bd.className = 'bdg'; bd.textContent = '！'; bd.setAttribute('aria-label', 'あたらしい'); b.appendChild(bd); }
+    if (!on && bd) bd.remove();
+  });
+}
+/* after a wipe: what would make you stronger right now (at most two) */
+function wipeTips(){
+  const t = [];
+  if (S.inv.some(it => eqTarget(it) && itemScore(it) > itemScore(S.equip[eqTarget(it)])))
+    t.push({tab:'gear', s:'持ち物に 今より 強い装備が ある。装備タブの「おすすめ装備」で つけかえよう'});
+  if (S.party.some(x => !x) && S.allies.some(a => !S.party.includes(a.id)))
+    t.push({tab:'ally', s:'パーティに あき枠が ある。仲間タブで 控えの 仲間を 入れよう'});
+  if (S.slots.some(x => !x) && Object.keys(S.skills).some(k => !S.slots.includes(k)))
+    t.push({tab:'skill', s:'技の枠が あいている。技タブで おぼえた技を セットしよう'});
+  const fk = ['inn', 'party', 'clock', 'bag'].find(k => facLv(k) < FAC[k].max && S.gold >= FAC[k].cost[facLv(k)]);
+  if (fk) t.push({tab:'town', s:`町の「${FAC[fk].n}」を 広げられる（${FAC[fk].d(facLv(fk) + 1)}）`});
+  const jobs = Object.keys(JOBS).filter(k => !JOBS[k].special && jobUnlocked(k) && jobLv(k) < JOB_MAX);
+  if (jobLv(S.job) >= JOB_MAX && jobs.length) t.push({tab:'job', s:'いまの ジョブは マスター済み。ジョブを かえると 新しい アビリティを おぼえられる'});
+  return t.slice(0, 2);
+}
 function renderCamp(){
+  if (S.newMark && S.newMark[TAB]){ delete S.newMark[TAB]; } updTabBadges();
   document.querySelectorAll('#tabs [data-tab]').forEach(b => b.setAttribute('aria-selected', b.dataset.tab === TAB));
   const P = $('#panel');
   if (TAB === 'go') P.innerHTML = panelGo();
@@ -4206,6 +4242,8 @@ $('#modal').addEventListener('click', e => {
   const b = e.target.closest('[data-m]'); if (!b) return;
   const m = b.dataset.m;
   if (m === 'camp') toCamp();
+  if (m === 'goTab'){ toCamp(); TAB = b.dataset.tab; renderCamp(); return; }
+  if (m === 'retryPrev'){ toCamp(); startRun(+b.dataset.f); return; }
   if (m === 'rec-yes' || m === 'rec-no') clearInterval(recTimer);
   if (m === 'rec-yes'){ hideModal(); acceptRecruit(b.dataset.sp, +b.dataset.f); if (R) R.paused = false; }
   if (m === 'rec-no'){ hideModal(); log('まものは さびしそうに さっていった…'); if (R) R.paused = false; }
