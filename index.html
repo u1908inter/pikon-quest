@@ -162,6 +162,7 @@ button{font:inherit;color:inherit}
 .li.u3{border-color:#7a4a22}.li.u4{border-color:#2f6a3a}
 .pips{display:flex;gap:6px;flex-wrap:wrap;margin-top:3px;font-size:11px}
 .pip{color:var(--dim)}.pip.on{color:var(--magic)}
+.pipd{color:var(--dim)}
 .setb{font-size:12px;line-height:1.5}
 .setb .off{color:#5a5d6a}
 .album{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:6px}
@@ -648,7 +649,7 @@ const JOBS = {
     A('鷹の目',       'spc', 'レアモンスターの 出現率 2倍',        s => s.pw.rarex2 = true),
     A('はやうち',     'atk', '攻撃速度 +15%',                     s => s.aspd += 15),
     A('獣使い',       'spc', '仲間の 攻撃力 +20%',                 s => s.pw.beast = true),
-    A('弱点をつく',   'atk', '会心の一撃が さらに +0.5倍',          s => add(s.pw, 'critPlus', 0.5)),
+    A('弱点をつく',   'atk', '会心の倍率 +0.5（ふだん ×1.8 → ×2.3）',          s => add(s.pw, 'critPlus', 0.5)),
     A('えものの目',   'spc', 'カードの出現率 2倍',                 s => s.pw.cardx2 = true)]},
   mahouken:{n:'魔法剣士', col:'#3ab0c8', d:'通常攻撃に 魔法を のせる', base:'攻撃力 +5%、技ダメージ +10%', bfx:s => { s.atkPct += 5; s.skill += 10; },
     unlock:() => jobLv('senshi') >= 5 && jobLv('mahou') >= 5, hint:'戦士と 魔法使いを どちらも Lv5', ab:[
@@ -952,7 +953,7 @@ const LEGEND = {
   crystal:{boss:'kgolem', slot:'body',   n:'クリスタルメイル',   p:'受けたダメージの 30% を 敵に はね返す', fx:s => add(s.pw, 'reflect', 30)},
   konton:   {boss:'vslime',  slot:'head',   n:'こんとんの冠', p:'技ダメージ +80%、技の再使用 -10%', fx:s => { s.skill += 80; s.cdr += 10; }},
   hoshikui: {boss:'vgolem',  slot:'body',   n:'ほしくいの鎧', p:'最大HP +50%、受けるダメージ -30%', fx:s => { s.hpPct += 50; s.pw.dmgCut = Math.max(s.pw.dmgCut || 0, 30); }},
-  abyssfang:{boss:'vdragon', slot:'weapon', n:'深淵竜の牙',   p:'攻撃力 +50%、会心の一撃 +1倍', fx:s => { s.atkPct += 50; add(s.pw, 'critPlus', 1); }},
+  abyssfang:{boss:'vdragon', slot:'weapon', n:'深淵竜の牙',   p:'攻撃力 +50%、会心の倍率 +1.0（ふだん ×1.8 → ×2.8）', fx:s => { s.atkPct += 50; add(s.pw, 'critPlus', 1); }},
   dheart: {boss:'dragon', slot:'acc',    n:'ドラゴンハート',     p:'熟練度の伸び 2倍、技の再使用 -20%', fx:s => { s.pw.mastery2 = true; s.cdr += 20; }},
 };
 const ROLE_D = {'回復':'弱った仲間を回復','範囲':'敵全体を攻撃','前衛':'正面の敵に強打','速攻':'攻撃間隔が短い','妨害':'敵を眠らせて足止め','壁':'敵の攻撃を引きつける'};
@@ -2525,6 +2526,54 @@ function doReforge(it, i){
   return {old, nw};
 }
 /* one refine attempt; the result window offers the next step on the same item so a run of refines needs no re-selecting */
+/* まとめて精錬: keep refining one item up to +10 (or the cap if lower) until it gets there, the gold runs out, or it breaks */
+const REF_BULK_TO = 10;
+function refPlan(it, to){
+  to = Math.min(to || REF_BULK_TO, refCap()); let r = it.ref || 0, p = 1, cost = 0;
+  const save0 = it.ref; for (; r < to; r++){ it.ref = r; p *= refRate(r); cost += refCost(it); } it.ref = save0;
+  return {to, p, cost};
+}
+/* pick how far to go (+1 … cap): the cost and the chance of getting there update with the choice */
+let refBulkTo = REF_BULK_TO;
+/* percent with two significant digits for tiny odds (0.0039%), whole numbers from 10% */
+const pctStr = p => { const v = p * 100; if (v >= 10) return String(Math.round(v)); if (v <= 0) return '0'; return v.toFixed(Math.min(8, Math.max(1, 1 - Math.floor(Math.log10(v))))); };
+function refBulkModal(it, to){
+  const r = it.ref || 0, cap = refCap();
+  to = clamp(to || Math.max(r + 1, Math.min(refBulkTo, cap)), r + 1, cap);
+  const pl = refPlan(it, to), pct = pl.p * 100;
+  const chips = []; for (let t = r + 1; t <= cap; t++){ const pt = refPlan(it, t).p;
+    chips.push(`<button class="chip ${t === to ? 'on' : ''}" data-m="refBulkTo" data-id="${it.id}" data-to="${t}">+${t}${pt < 1 ? `<small>${pctStr(pt)}%</small>` : ''}</button>`); }
+  showModal(`<p><span class="r${it.rar}">${esc(it.name)}</span>（いま +${r}）を<br>どこまで まとめて 精錬しますか？</p>
+    <div class="chips">${chips.join('')}</div>
+    <div class="refups"><div class="refup"><span>費用</span><span class="num">${fmtN(pl.cost)}G</span><span class="hint num">いま ${fmtN(S.gold)}G</span></div>
+    <div class="refup"><span>成功率</span><span class="num" style="${pl.p < 1 ? 'color:#ffb0a6' : ''}">${pctStr(pl.p)}%</span><span class="hint">+${to}まで とどく 確率</span></div></div>
+    ${pl.p < 1 ? '<p style="color:#ffb0a6">とちゅうで 1回でも 失敗すると、その場で 装備は こわれる。</p>' : '<p class="hint">ここまでは 失敗しない。</p>'}
+    ${S.gold < pl.cost ? '<p class="hint">ゴールドが たりなくなったら、そこで とまる。</p>' : ''}
+    <div class="opts"><button class="btn" data-m="close">やめる</button><button class="btn ${pl.p < 1 ? 'danger' : 'primary'}" data-m="refBulkDo" data-id="${it.id}" data-to="${to}">+${to}まで 精錬</button></div>`);
+}
+function bulkRefine(it, to){
+  to = Math.min(to || REF_BULK_TO, refCap());
+  const r0 = it.ref || 0, worn = EQ.some(k => S.equip[k] === it), hs0 = worn ? heroStats() : null;
+  let spent = 0, broke = false, tries = 0;
+  while ((it.ref || 0) < to){
+    const r = it.ref || 0, cost = refCost(it); if (S.gold < cost) break;
+    S.gold -= cost; spent += cost; S.stats2.refines++; tries++;
+    if (Math.random() < refRate(r)){ it.ref = r + 1; refName(it); }
+    else { broke = true; for (const k of EQ) if (S.equip[k] === it) S.equip[k] = null; S.inv = S.inv.filter(x => x !== it); S.stats2.broken++; break; }
+  }
+  save(); se('anvil');
+  const r1 = it.ref || 0;
+  if (broke){ setTimeout(() => se('wipe'), 350);
+    showModal(`<p style="color:#ffb0a6">カキーン… +${r1} → +${r1 + 1} で しっぱい。<br>${esc(it.name)} は こなごなに くだけた。</p><p class="hint">+${r0} から ${tries}回 精錬 ／ ${fmtN(spent)}G つかった</p><div class="opts"><button class="btn primary" data-m="close">OK</button></div>`); }
+  else {
+    setTimeout(() => se(r1 >= 7 ? 'clear' : 'stage'), 350);
+    let heroUp = '';
+    if (hs0 && r1 > r0){ const hs1 = heroStats(), d = [['atk', '攻撃力'], ['def', '防御力'], ['hp', '最大HP']].filter(([k]) => Math.round(hs1[k]) !== Math.round(hs0[k]))
+      .map(([k, n]) => `${n} ${fmtN(Math.round(hs0[k]))} → ${fmtN(Math.round(hs1[k]))}`); if (d.length) heroUp = `<p class="hint">ゆうしゃ：${d.join(' ／ ')}</p>`; }
+    showModal(`<p class="r2">${r1 >= to ? `+${r1} に しあがった！` : `ゴールドが たりず +${r1} で とまった`}</p><p><span class="r${it.rar}">${esc(it.name)}</span>（+${r0} → +${r1}、×${REF_MUL[r0]} → ×${REF_MUL[r1]}）</p>${heroUp}<p class="hint">${tries}回 精錬 ／ ${fmtN(spent)}G つかった</p><div class="opts"><button class="btn primary" data-m="close">OK</button></div>`);
+  }
+  renderCamp(); renderParty(); renderTop();
+}
 function doRefine(it){
   const r = it.ref || 0, rate = refRate(r), cost = refCost(it);
   if (r >= refCap() || S.gold < cost) return;
@@ -3741,7 +3790,7 @@ function paintAllyIcons(){
 }
 function cardPips(it){
   if (!it.cards || !it.cards.length) return '';
-  return `<div class="pips">${it.cards.map(c => c ? `<span class="pip on">◆${CARDS[c].n.replace('カード', '')}</span>` : '<span class="pip">◇ あき</span>').join('')}</div>`;
+  return `<div class="pips">${it.cards.map(c => c ? `<span class="pip on">◆${CARDS[c].n.replace('カード', '')}<span class="pipd">（${CARDS[c].d}）</span></span>` : '<span class="pip">◇ あき</span>').join('')}</div>`;
 }
 function itemExtra(it){
   let h = '';
@@ -3992,7 +4041,8 @@ function panelTown(){
       const rate = refRate(r), cost = refCost(it), conf = confirmKey === 'ref' + it.id;
       return `<div class="li u${it.rar}" style="cursor:default;align-items:center"><div class="body"><div class="t"><span class="r${it.rar}">${esc(it.name)}</span><span class="num">+${r} → +${r + 1}<span class="hint">（×${REF_MUL[r]} → ×${REF_MUL[r + 1]}）</span></span></div>
         <div class="d">${where}${it.base.atk || it.base.def || it.base.hp ? '' : ' ／ <span style="color:#ffb0a6">基本性能なし（精錬しても 上がらない）</span>'} ／ 成功率 <span style="${rate < 1 ? 'color:#ffb0a6' : ''}">${Math.round(rate * 100)}%</span> ／ ${fmtN(cost)}G</div></div>
-        <button class="btn sm ${conf ? 'danger' : ''}" data-act="refine" data-id="${it.id}" style="flex:none" ${S.gold >= cost ? '' : 'disabled'}>${conf ? '本当に<br>精錬' : '精錬'}</button></div>`;
+        <div style="display:flex;flex-direction:column;gap:4px;flex:none"><button class="btn sm ${conf ? 'danger' : ''}" data-act="refine" data-id="${it.id}" ${S.gold >= cost ? '' : 'disabled'}>${conf ? '本当に<br>精錬' : '精錬'}</button>
+        ${r + 1 < refCap() ? `<button class="btn sm" data-act="refBulk" data-id="${it.id}" ${S.gold >= cost ? '' : 'disabled'}>まとめて</button>` : ''}</div></div>`;
     };
     h += `<h3>そうび中</h3><div class="list">${equipped().map(it => row(it, SLOTN[it.slot])).join('') || '<p class="hint">なにも そうびしていない。</p>'}</div>`;
     const cand = S.inv.filter(it => it.rar >= 2 || it.ref).sort((a, b) => b.rar - a.rar || itemScore(b) - itemScore(a));
@@ -4278,6 +4328,8 @@ $('#modal').addEventListener('click', e => {
     (navigator.clipboard ? navigator.clipboard.writeText(ta.value) : Promise.reject()).then(() => $('#saveMsg').textContent = 'コピーした！', () => { try { document.execCommand('copy'); $('#saveMsg').textContent = 'コピーした！'; } catch(e){ $('#saveMsg').textContent = '自動で コピーできなかった。文字列を 長押しして コピーしてね。'; } });
     return; }
   if (m === 'abyssOk'){ S.abyssSeen = abyssLv(); S.unlockSeen = Math.max(S.unlockSeen || 0, S.maxFloor || 0); save(); hideModal(); if (R) R.paused = false; renderSkills(); renderCamp(); renderParty(); renderTop(); return; }
+  if (m === 'refBulkTo'){ const it = findItem(+b.dataset.id); refBulkTo = +b.dataset.to; if (it) refBulkModal(it, refBulkTo); return; }
+  if (m === 'refBulkDo'){ const it = findItem(+b.dataset.id); hideModal(); if (it) bulkRefine(it, +b.dataset.to); return; }
   if (m === 'refAgain'){ const it = findItem(+b.dataset.id); hideModal(); if (it) doRefine(it); return; }
   if (m === 'saveFile'){
     const code = $('#saveCode').value, msg = $('#saveMsg');
@@ -4384,6 +4436,7 @@ $('#panel').addEventListener('click', e => {
       S.gold -= cost; S.fac[k] = l + 1;
       while (S.party.length < partySize()) S.party.push(null);
       se('stage'); save(); break; }
+    case 'refBulk': { const it = findItem(+b.dataset.id); if (it) refBulkModal(it); return; }
     case 'refine': {
       const id = +b.dataset.id, it = findItem(id); if (!it) break;
       const r = it.ref || 0, rate = refRate(r), cost = refCost(it);
