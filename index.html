@@ -1145,7 +1145,7 @@ function freshSave(){
     mats:{iron:0, leaf:0, mithril:0, crystal:0, star:0}, craft:{m:0},
     market:{day:'', bought:{}}, dayOff:0, stall:[], stallT:0, stallLog:[], cmdKnown:{},
     fac:{bag:0, stall:0, forge:0, inn:0, party:0, clock:0}, charmNext:{}, stats2:{refines:0, broken:0},
-    seenCoach:false, seenHelp:{}, helpVer:2, abyssBoss:{}, autoDive:false, unlockSeen:0, trueClear:null, devRoom:null, newMark:{}, guard:0, autoRecruit:false, dmgNum:'all', autoSellWeak:false,
+    seenCoach:false, seenHelp:{}, helpVer:2, abyssBoss:{}, autoDive:false, unlockSeen:0, trueClear:null, devRoom:null, newMark:{}, shards:0, guard:0, autoRecruit:false, dmgNum:'all', autoSellWeak:false,
     stats:{kills:0, sparks:0, recruits:0, cards:0},
   };
 }
@@ -2635,6 +2635,9 @@ function addInv(it){
     if (worst >= 0){ const [sold] = S.inv.splice(worst, 1); S.gold += sellPrice(sold); }
   }
 }
+/* カード交換所: spare cards → カードのかけら → any card already in the album */
+const shardGive = k => CARDS[k].boss ? 5 : CARDS[k].rare ? 3 : 1;
+const shardCost = k => CARDS[k].boss ? 60 : CARDS[k].rare ? 40 : 8;
 function addCard(k){
   S.cards[k] = (S.cards[k] || 0) + 1; S.stats.cards++;
   const fresh = !S.album[k]; S.album[k] = true;
@@ -3199,15 +3202,19 @@ function fuseAllies(baseId, matId){
   const fpw = curPw();
   if (!fpw.fuseSafe && Math.random() < ACCIDENT_RATE * (S.dbg.accident ? 32 : 1) * (fpw.fuseWild ? 4 : 1)){
     const from = a.sp, fam = family(from), area = SP[from].area || 0;
-    let cands = Object.keys(SP).filter(k => k !== from && family(k) === fam && (SP[k].rare || SP[k].boss || (SP[k].area || 0) > area));
-    if (!cands.length) cands = Object.keys(SP).filter(k => SP[k].rare && k !== from);
-    a.sp = pick(cands);
-    a.plus += 5;
-    a.g = {hp: a.g.hp * 1.25, atk: a.g.atk * 1.25};
-    a.maxLv = Math.min(ALLY_MAX_LV, a.maxLv + 50); a.capped = a.lv >= allyCap(a);
-    a.accident = true;
-    S.stats2.accidents = (S.stats2.accidents || 0) + 1;
-    acc = {from};
+    // only ever a step up: same family, rarer (or as rare) and from a deeper area / a boss or rare kind — never down to a weaker kind
+    const up = k => k !== from && !SP[k].abyssBoss && SP[k].rate >= SP[from].rate && (SP[k].rare || SP[k].boss || (SP[k].area || 0) > area);
+    let cands = Object.keys(SP).filter(k => family(k) === fam && up(k));
+    if (!cands.length) cands = Object.keys(SP).filter(k => (SP[k].rare || SP[k].boss) && up(k) && SP[k].rate >= SP[from].rate);
+    if (cands.length){   // nothing above it: no accident this time
+      a.sp = pick(cands);
+      a.plus += 5;
+      a.g = {hp: a.g.hp * 1.25, atk: a.g.atk * 1.25};
+      a.maxLv = Math.min(ALLY_MAX_LV, a.maxLv + 50); a.capped = a.lv >= allyCap(a);
+      a.accident = true;
+      S.stats2.accidents = (S.stats2.accidents || 0) + 1;
+      acc = {from};
+    }
   }
   save();
   return {a, acc};
@@ -3655,7 +3662,7 @@ function renderCamp(){
   if (TAB === 'gear') P.innerHTML = panelGear();
   if (TAB === 'card'){ P.innerHTML = panelCards(); paintAllyIcons(); }
   if (TAB === 'job'){ P.innerHTML = panelJob(); paintAllyIcons(); }
-  if (TAB === 'town') P.innerHTML = panelTown();
+  if (TAB === 'town'){ P.innerHTML = panelTown(); if (TOWN === 'swap') paintAllyIcons(); }
   if (TAB === 'cfg') P.innerHTML = panelCfg();
   renderTop();
   maybeHelp();
@@ -3960,8 +3967,24 @@ function openMslot(c){
 let TOWN = 'craft', craftSlot = 'weapon', craftStar = false, craftMode = 'make', craftSet = 'raimei', rfSel = null;
 function panelTown(){
   mktSync();
-  let h = `<div class="row">${[['craft', '工房'], ['refine', '精錬所'], ['market', '市場'], ['stall', '露店'], ['fac', '施設']].map(([k, n]) => `<button class="btn ${TOWN === k ? 'primary' : ''}" style="${TOWN === k ? 'font-size:13px;padding:7px 12px' : ''}" data-act="town" data-k="${k}">${n}</button>`).join('')}</div>`;
-  h += `<div class="kv">${Object.keys(MATS).map(k => `<span><i>${MATS[k].n}</i>${S.mats[k]}</span>`).join('')}<span><i>ゴールド</i>${S.gold}</span></div>`;
+  let h = `<div class="row">${[['craft', '工房'], ['refine', '精錬所'], ['market', '市場'], ['swap', '交換所'], ['stall', '露店'], ['fac', '施設']].map(([k, n]) => `<button class="btn ${TOWN === k ? 'primary' : ''}" style="${TOWN === k ? 'font-size:13px;padding:7px 12px' : ''}" data-act="town" data-k="${k}">${n}</button>`).join('')}</div>`;
+  h += `<div class="kv">${Object.keys(MATS).map(k => `<span><i>${MATS[k].n}</i>${S.mats[k]}</span>`).join('')}<span><i>ゴールド</i>${fmtN(S.gold)}</span></div>`;
+  if (TOWN === 'swap'){
+    const keys = Object.keys(CARDS), own = keys.filter(k => S.cards[k] > 0), known = keys.filter(k => S.album[k]);
+    h += `<h3>カード交換所</h3><p class="hint">いらない カードを「カードのかけら」に かえて、かけらで すきな カードと 交換できる。交換できるのは カード帖に 登録ずみの カードだけ。</p>
+      <p>カードのかけら：<b class="r2">${S.shards || 0}</b></p>
+      <h3>かけらに かえる</h3><p class="hint">ふつう 1 ／ レアモンスター 3 ／ ボス 5 かけら</p><div class="list">`;
+    if (!own.length) h += `<p class="hint">カードを 1まいも もっていない。</p>`;
+    for (const k of own){ const c = confirmKey === 'shard' + k;
+      h += `<div class="li" style="cursor:default;align-items:center"><canvas width="16" height="16" data-icon="${SP[k].spr}"></canvas><div class="body"><div class="t"><span class="${cardCls(k)}">${CARDS[k].n}</span><span class="num">×${S.cards[k]}</span></div><div class="d">${CARDS[k].d}</div></div>
+        <button class="btn sm ${c ? 'danger' : ''}" data-act="toShard" data-k="${k}" style="flex:none">${c ? '本当に' : `かけら +${shardGive(k)}`}</button></div>`; }
+    h += `</div><h3>かけらで 交換</h3><p class="hint">ふつう 8 ／ レアモンスター 40 ／ ボス 60 かけら</p><div class="list">`;
+    if (!known.length) h += `<p class="hint">カード帖に 登録された カードが まだ ない。</p>`;
+    for (const k of known){ const cost = shardCost(k);
+      h += `<div class="li" style="cursor:default;align-items:center"><canvas width="16" height="16" data-icon="${SP[k].spr}"></canvas><div class="body"><div class="t"><span class="${cardCls(k)}">${CARDS[k].n}</span><span class="num hint">×${S.cards[k] || 0}</span></div><div class="d">${CARDS[k].d}</div></div>
+        <button class="btn sm" data-act="fromShard" data-k="${k}" style="flex:none" ${(S.shards || 0) >= cost ? '' : 'disabled'}>${cost} かけら</button></div>`; }
+    h += `</div>`;
+  }
   if (TOWN === 'craft'){
     const m = S.craft.m;
     h += `<h3>工房</h3>
@@ -4370,7 +4393,7 @@ $('#panel').addEventListener('click', e => {
   const act = b.dataset.act;
   auInit();
   if (b.tagName === 'INPUT') return; // handled by change
-  if (!['bye', 'sellN', 'wipe', 'csell', 'sell', 'extract', 'refine', 'sellg', 'fuseAll', 'fuseSp', 'sellWeak'].includes(act)) confirmKey = null;
+  if (!['bye', 'sellN', 'wipe', 'csell', 'toShard', 'sell', 'extract', 'refine', 'sellg', 'fuseAll', 'fuseSp', 'sellWeak'].includes(act)) confirmKey = null;
   switch (act){
     case 'fl-': S.selFloor = Math.max(1, S.selFloor - 1); se('ui'); break;
     case 'fl+': S.selFloor = Math.min(S.maxFloor + 1, S.selFloor + 1); se('ui'); break;
@@ -4409,6 +4432,15 @@ $('#panel').addEventListener('click', e => {
       equipItem(it); se('ui'); save(); break; }
     case 'unequip': { const k = b.dataset.k; if (S.equip[k]){ S.inv.push(S.equip[k]); S.equip[k] = null; } se('ui'); save(); break; }
     case 'card': openCardPicker(+b.dataset.id); return;
+    case 'toShard': {
+      const k = b.dataset.k; if (!(S.cards[k] > 0)) break;
+      if (confirmKey === 'shard' + k){ S.cards[k]--; S.shards = (S.shards || 0) + shardGive(k); confirmKey = null; se('drop'); save(); }
+      else confirmKey = 'shard' + k;
+      break; }
+    case 'fromShard': {
+      const k = b.dataset.k, cost = shardCost(k); if (!S.album[k] || (S.shards || 0) < cost) break;
+      S.shards -= cost; S.cards[k] = (S.cards[k] || 0) + 1; se('card'); toast(`<span class="${cardCls(k)}">${CARDS[k].n}</span> を 交換した！`); save();
+      break; }
     case 'csell': {
       const k = b.dataset.k;
       if (confirmKey === 'csell' + k){ S.cards[k]--; S.gold += mktSell('card:' + k); confirmKey = null; se('drop'); save(); }
