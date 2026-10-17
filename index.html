@@ -3157,6 +3157,7 @@ function openRecruit(spk, f){
     <p>${sp.n}が おきあがり<br>なかまに なりたそうに こちらを みている！</p>
     <p class="hint">役割: ${sp.role}（${ROLE_D[sp.role]}） ／ 専用技: ${sp.sk.n}</p>
     <p>なかまに してあげますか？</p>
+    ${S.party.includes(null) ? '' : '<p class="hint">パーティが いっぱいなので 控えに 入ります（拠点の 仲間タブで いれかえられる）</p>'}
     <div class="opts"><button class="btn" data-m="rec-no">いいえ</button><button class="btn primary" data-m="rec-yes" data-sp="${spk}" data-f="${f}">はい（3）</button></div>
     <div class="rec-timer"><b id="recBar"></b></div>`);
   const c = $('#recCv'), x = c.getContext('2d'), s = getSpr(sp.spr);
@@ -3309,12 +3310,13 @@ function acceptRecruit(spk, f){
   S.allies.push(al); S.stats.recruits++;
   if (R) R.loot.recruits++;
   if (!S.party.includes(null)) setNew('ally');
-  log(`${al.name}（${SP[spk].n}）が なかまに くわわった！`);
   const slot = S.party.indexOf(null);
+  if (slot >= 0) log(`${al.name}（${SP[spk].n}）が なかまに くわわった！`);
+  else log(`${al.name}（${SP[spk].n}）は 控えに くわわった（拠点の 仲間タブで いれかえられる）`);
   if (slot >= 0){
     S.party[slot] = al.id;
     if (R){ const act = makeAllyActor(al, slot, R.hs); R.actors.push(act); burst(act.x, act.y - 6, '#ffe14a', 10, 30); }
-  } else log('（パーティが いっぱい。拠点で いれかえよう）');
+  }
   renderParty(); save();
 }
 
