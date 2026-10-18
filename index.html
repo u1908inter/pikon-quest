@@ -1145,7 +1145,7 @@ function freshSave(){
     mats:{iron:0, leaf:0, mithril:0, crystal:0, star:0}, craft:{m:0},
     market:{day:'', bought:{}}, dayOff:0, stall:[], stallT:0, stallLog:[], cmdKnown:{},
     fac:{bag:0, stall:0, forge:0, inn:0, party:0, clock:0}, charmNext:{}, stats2:{refines:0, broken:0},
-    seenCoach:false, seenHelp:{}, helpVer:2, abyssBoss:{}, autoDive:false, unlockSeen:0, trueClear:null, devRoom:null, newMark:{}, shards:0, guard:0, autoRecruit:false, dmgNum:'all', autoSellWeak:false,
+    seenCoach:false, seenHelp:{}, helpVer:2, abyssBoss:{}, autoDive:false, unlockSeen:0, trueClear:null, devRoom:null, newMark:{}, shards:0, combos:{}, bossMiss:{}, comboFx:true, guard:0, autoRecruit:false, dmgNum:'all', autoSellWeak:false,
     stats:{kills:0, sparks:0, recruits:0, cards:0},
   };
 }
@@ -2053,7 +2053,7 @@ function makeAllyActor(al, i, hs = heroStats()){
   const st = allyStats(al), sp = SP[al.sp], m = allyMods(hs);
   const hp = Math.round(st.hp * m.hp);
   return {kind:'ally', id:al.id, slot:i, name:allyName(al), x:ALLY_POS[i].x, y:ALLY_POS[i].y, hp, max:hp, atk:Math.round(st.atk * m.atk), def:Math.round(st.def * (m.def || 1)), int:st.int,
-          atkT:rnd(0.2, 1), skT:rnd(1, 3), skcd:sp.sk.cd * m.cd, lunge:0, hitT:0, dead:false, spr:sp.spr, sp:al.sp};
+          atkT:rnd(0.2, 1), skT:rnd(1, 3), skcd:sp.sk.cd * m.cd, lunge:0, hitT:0, dead:false, spr:sp.spr, sp:al.sp, sc: sp.boss ? 1.5 : 1};
 }
 function startRun(f){
   auInit(); track('start', 'はじめて出撃');
@@ -2118,12 +2118,17 @@ function update(dt){
   if (R.paused) return;
   if (R.freeze > 0){
     R.freeze -= dt;
+    if (R.comboShow) updFx(dt);
     if (R.freeze <= 0 && R.pending){ const id = R.pending; R.pending = null; execHeroSkill(id); afterSkill(id); }
+    if (R.freeze <= 0 && R.pendingCombo){ const c = R.pendingCombo; R.pendingCombo = null; comboEffect(c); }
     return;
   }
   updFx(dt);
   if (R.shake > 0) R.shake -= dt;
   if (R.buff > 0) R.buff -= dt;
+  if (R.comboCd > 0) R.comboCd -= dt;
+  if (R.comboGuard > 0) R.comboGuard -= dt;
+  if (R.comboShow && !G.fx.some(f => f.k === 'combo')) R.comboShow = false;
   for (let i = 0; i < nSlots(); i++) if (R.cds[i] > 0) R.cds[i] -= dt;
   if (R.stealCd > 0) R.stealCd -= dt;
   if (R.cmdCd) for (const k in R.cmdCd) if (R.cmdCd[k] > 0) R.cmdCd[k] -= dt;
@@ -2176,7 +2181,7 @@ function fight(dt){
     if (a.hitT > 0) a.hitT -= dt;
     if (a.lunge > 0) a.lunge -= dt;
     if (a.dead) continue;
-    if (a.kind === 'ally'){ a.skT -= dt; if (a.skT <= 0) a.skT = allySkill(a) ? a.skcd : 0.6; }
+    if (a.kind === 'ally'){ a.skT -= dt; if (a.skT <= 0){ const combo = tryCombo(a); const used = allySkill(a); a.skT = used || combo ? a.skcd : 0.6; } }
     const tgt = front(); if (!tgt) continue;
     if (a.jumping > 0) continue;
     a.atkT -= dt * (a.kind === 'hero' ? 1 + (hs.aspd + (R.touki || 0) + (R.dsT > 0 ? 50 : 0)) / 100 : 1 + (hs.pw.allyAspd || 0) / 100);
@@ -2290,6 +2295,7 @@ function hurtActor(a, d, src){
   if (a.kind === 'ally' && pw.cover) d *= 0.8;
   if (a.kind === 'ally' && pw.allyGuard) d *= 1 - pw.allyGuard / 100;
   if (pw.charmGuard) d *= 0.75;
+  if (R.comboGuard > 0) d *= 0.5;
   if (a.kind === 'hero' && pw.dmgCut) d *= 1 - pw.dmgCut / 100;
   if (a.kind === 'hero' && R.hs.pw.evade && Math.random() * 100 < R.hs.pw.evade){
     burst(a.x, a.y - 8, '#b8c8ff', 4, 15);
@@ -2392,8 +2398,12 @@ function killEnemy(e){
   // blue box
   if (e.boss || (!e.rare && Math.random() < 0.004 * (hs.pw.boxx2 ? 2 : 1))){ S.boxes++; R.loot.boxes++; log('<span class="r1">青箱</span> を てにいれた'); burst(e.x, e.y - 6, '#4a8cff', 8, 25); }
   // recruit roll
-  const denom = SP[e.sp].rate * BAL.recruitMul / (S.dbg.recruit ? 10 : 1) / (hs.pw.tame ? 2 : 1) / (hs.pw.charmTame ? 2 : 1) / (hs.pw.call ? 1.5 : 1);   // halved base recruit chance
-  if (!R.paused && Math.random() < 1 / denom) openRecruit(e.sp, f);
+  const sp0 = SP[e.sp], bossRec = sp0.boss;
+  // bosses: about 1/30 (abyss bosses 1/15, they are rare), and every miss makes the next one a little likelier
+  const baseDen = bossRec ? (sp0.abyssBoss ? 15 : 30) / (1 + 0.15 * ((S.bossMiss || {})[e.sp] || 0)) : sp0.rate * BAL.recruitMul;
+  const denom = baseDen / (S.dbg.recruit ? 10 : 1) / (hs.pw.tame ? 2 : 1) / (hs.pw.charmTame ? 2 : 1) / (hs.pw.call ? 1.5 : 1);
+  if (!R.paused && Math.random() < 1 / denom){ if (bossRec && S.bossMiss) delete S.bossMiss[e.sp]; openRecruit(e.sp, f); }
+  else if (bossRec){ S.bossMiss = S.bossMiss || {}; S.bossMiss[e.sp] = (S.bossMiss[e.sp] || 0) + 1; }
 }
 function gainJP(n){
   const j = S.job, before = jobLv(j);
@@ -3031,6 +3041,8 @@ function useSkill(i, manual){
     renderSkills(); save();
     return;
   }
+  tryCombo(null);   // rolled before the swing, so a wave-clearing skill doesn't leave the combo with nothing to hit
+  if (!R) return;
   R.autoCast = !manual;
   const kills = execHeroSkill(id);
   gainMastery(id, 1 + kills * 0.5);
@@ -3158,14 +3170,161 @@ function allySkill(a){
   return true;
 }
 
+/* ---------- 合体技 (combo moves): the hero + an ally, or two allies, sometimes "spark" a move together ---------- */
+const COMBO_FAM = ['slime', 'bat', 'goblin', 'wolf', 'mush', 'skel', 'golem', 'dragon'];
+const COMBO_BOSS = ['kslime', 'kmush', 'kgolem', 'vslime', 'vgolem', 'vdragon'];
+const COMBO_EL = {slime:'heal', bat:'multi', goblin:'gold', wolf:'haste', mush:'sleep', skel:'crit', golem:'guard', dragon:'burn'};
+const COMBO_EL_D = {heal:'味方全員を 回復', multi:'ランダムに 連続攻撃', gold:'ゴールドを 入手', haste:'技の 再使用を 短縮', sleep:'敵を ねむらせる',
+  crit:'かならず 会心', guard:'しばらく 受けるダメージ 半減', burn:'敵を 燃やす', power:'威力 特大'};
+/* [a, b, name]: a = 'hero' / family / boss key */
+const COMBO_LIST = [
+  ['hero','slime','ぷるぷるトランポリン'], ['hero','bat','よぞらの はばたき斬り'], ['hero','goblin','ドタバタ ちゃんばら'], ['hero','wolf','疾風ライド'],
+  ['hero','mush','ねむりの ほうし斬り'], ['hero','skel','ホネホネ二刀流'], ['hero','golem','ゴーレム投げ'], ['hero','dragon','竜騎乗斬り'],
+  ['hero','kslime','ゴールデン・ボヨヨン'], ['hero','kmush','だいおうの ゆめ'], ['hero','kgolem','クリスタル・キャノン'],
+  ['hero','vslime','カオス・ダイブ'], ['hero','vgolem','ほしふらし'], ['hero','vdragon','しんえんの 竜騎斬'],
+  ['slime','slime','ダブル ぷるぷる'], ['slime','bat','ぷるぷる パラシュート'], ['slime','goblin','スライム なげ'], ['slime','wolf','ぷにぷに サーフィン'],
+  ['slime','mush','ぷるるん ほうし'], ['slime','skel','ホネまで ぷるぷる'], ['slime','golem','ゼリーの とりで'], ['slime','dragon','ぷるぷる ファイア'],
+  ['bat','bat','こうもりの むれ'], ['bat','goblin','ゴブリン くうゆ'], ['bat','wolf','よるの かりうど'], ['bat','mush','よなかの ほうしまき'],
+  ['bat','skel','まよなかの ぶとうかい'], ['bat','golem','いわおとし'], ['bat','dragon','そらの おうじゃ'],
+  ['goblin','goblin','ゴブリン だいこうしん'], ['goblin','wolf','ゴブリン ライダー'], ['goblin','mush','あやしい キノコりょうり'], ['goblin','skel','ガラクタ さくせん'],
+  ['goblin','golem','ゴーレム ドーザー'], ['goblin','dragon','ドラゴンの おたから'],
+  ['wolf','wolf','ツイン ファング'], ['wolf','mush','こもりうたの とおぼえ'], ['wolf','skel','ほねっこ ダッシュ'], ['wolf','golem','いわくだき ラッシュ'], ['wolf','dragon','ほのおの きば'],
+  ['mush','mush','キノコの もり'], ['mush','skel','ねむれる ほね'], ['mush','golem','こけむす いわ'], ['mush','dragon','やきキノコ'],
+  ['skel','skel','ホネホネ ロック'], ['skel','golem','ほねと いしの へい'], ['skel','dragon','りゅうの ほね おどり'],
+  ['golem','golem','ダブル いわなだれ'], ['golem','dragon','マグマ ゴーレム'], ['dragon','dragon','ツイン ブレス'],
+  ['kslime','slime','おうさまと けらい'], ['kmush','mush','キノコの おうこく'], ['kgolem','golem','クリスタル とりで'],
+  ['vslime','slime','こんとんの しずく'], ['vgolem','golem','ほしの いしがき'], ['vdragon','dragon','しんえんの 二重咆哮'],
+];
+const comboFam = k => SP[k] && (SP[k].base || (BOSS_DEF[k] && BOSS_DEF[k].base) || (RARE_DEF[k] && RARE_DEF[k].base) || (ABYSS_BOSS_DEF[k] && ABYSS_BOSS_DEF[k].base)) || k;
+const comboIsBoss = k => COMBO_BOSS.includes(k);
+const COMBOS = COMBO_LIST.map(([a, b, n]) => {
+  const els = [];
+  for (const k of [a, b]) if (k !== 'hero'){ els.push(COMBO_EL[comboFam(k)]); if (comboIsBoss(k)) els.push('power'); }
+  const grp = a === 'hero' ? 'hero' : (comboIsBoss(a) || comboIsBoss(b)) ? 'boss' : 'ally';
+  return {id: a + '+' + b, a, b, n, els, grp};
+});
+const comboFits = (act, key) => act && act.kind === 'ally' && (act.sp === key || (!comboIsBoss(key) && comboFam(act.sp) === key));
+function comboDesc(c){
+  const els = c.els.filter(e => e !== 'multi' || true);
+  const head = els.includes('multi') ? 'ランダムに 連続攻撃' : '敵全体に 大ダメージ';
+  const rest = [...new Set(els.filter(e => e !== 'multi'))].map(e => COMBO_EL_D[e]);
+  return [head, ...rest].join('、') + (new Set(els).size < els.length ? '（同じ ちからが 重なって 強力）' : '');
+}
+function comboPartners(c, src, allies){
+  if (c.a === 'hero'){
+    if (src) return null;
+    const p = allies.find(x => comboFits(x, c.b)); return p ? [null, p] : null;
+  }
+  if (!src) return null;
+  for (const [mine, other] of [[c.a, c.b], [c.b, c.a]]){
+    if (!comboFits(src, mine)) continue;
+    const p = allies.find(x => x !== src && comboFits(x, other)); if (p) return [src, p];
+  }
+  return null;
+}
+function tryCombo(src){
+  if (!R || R.phase !== 'fight' || R.paused || R.freeze > 0 || (R.comboCd || 0) > 0 || !front()) return false;
+  if (R.actors[0].dead && !src) return false;
+  const allies = R.actors.filter(a => a.kind === 'ally' && !a.dead);
+  if (!allies.length) return false;
+  const cands = [];
+  for (const c of COMBOS){ const pr = comboPartners(c, src, allies); if (pr) cands.push([c, pr]); }
+  for (let i = cands.length - 1; i > 0; i--){ const j = Math.floor(Math.random() * (i + 1)); [cands[i], cands[j]] = [cands[j], cands[i]]; }
+  for (const [c, pr] of cands){
+    const known = !!(S.combos && S.combos[c.id]);
+    let p = c.a === 'hero' ? (known ? 1 / 25 : 1 / 150) : (known ? 1 / 40 : 1 / 200);
+    if (S.dbg.spark) p *= 10;
+    if (Math.random() < p){ startCombo(c, pr[0], pr[1]); return true; }
+  }
+  return false;
+}
+function startCombo(c, a1, a2){
+  S.combos = S.combos || {};
+  const first = !S.combos[c.id];
+  S.combos[c.id] = (S.combos[c.id] || 0) + 1;
+  R.comboCd = 10;
+  const nmA = a1 ? a1.name : 'ゆうしゃ', nmB = a2.name;
+  if (S.comboFx === false){   // setting: no cut-in, no pause — just a line in the log and the effect at once
+    se(first ? 'pikon' : 'skill'); callout((first ? '合体ひらめき！ ' : '') + c.n + '！');
+    log(first ? `ピコーン！ ${esc(nmA)}と ${esc(nmB)}の 合体技「<span class="r2">${c.n}</span>」を ひらめいた！` : `${esc(nmA)}と ${esc(nmB)}の 合体技「${c.n}」！`);
+    if (first){ setNew('ally'); if (Object.keys(S.combos).length === 1) track('combo-1', '合体技を はじめて 発見'); save(); }
+    comboEffect(c); return;
+  }
+  G.fx.push({k:'combo', a: a1 ? a1.spr : R.actors[0].spr, b: a2.spr, life: first ? 1.7 : 1.0, max: first ? 1.7 : 1.0, col:'#ffe14a', first});
+  if (first){
+    flash(0.9, '#ffffff'); se('pikon'); setTimeout(() => se('card'), 250);
+    banner(`合体ひらめき！<b>${c.n}</b>`, 'spark', 2000);
+    log(`ピコーン！ ${esc(nmA)}と ${esc(nmB)}の 合体技「<span class="r2">${c.n}</span>」を ひらめいた！`);
+    R.freeze = 1.6; R.comboShow = true; R.pendingCombo = c;
+    setNew('ally');
+    if (Object.keys(S.combos).length === 1) track('combo-1', '合体技を はじめて 発見');
+    save();
+  } else {
+    flash(0.45, '#ffffff'); se('skill');
+    callout(c.n + '！'); log(`${esc(nmA)}と ${esc(nmB)}の 合体技「${c.n}」！`);
+    R.comboShow = true;
+    comboEffect(c);
+  }
+}
+function comboEffect(c){
+  if (!R) return;
+  const hs = R.hs, n = e => c.els.filter(x => x === e).length;
+  let mul = (c.a === 'hero' ? 4 : 3) * Math.pow(2, n('power'));
+  const multi = n('multi');
+  if (front()) execAttack({atk: hs.atk * (R.buff > 0 ? 1.5 : 1), crit: n('crit') ? 100 : hs.crit, critMul: hs.pw.critMul,
+    kind: multi ? 'random' : 'all', hits: multi ? 5 + 4 * multi : 1, count: 6, mul: multi ? mul * 0.45 : mul,
+    burn: n('burn') > 0, burnMul: n('burn'), stun: n('sleep') ? 1.5 + n('sleep') : 0, fx: n('burn') ? 'fire' : multi ? 'hit' : 'wave', heroSkill: true});
+  if (n('heal')) for (const a of R.actors) healActor(a, a.max * 0.3 * n('heal'));
+  if (n('gold')){ const g = Math.round(Math.min(1e290, 30 * gGold(R.floor) * n('gold'))); S.gold = Math.min(NUM_CAP, S.gold + g); R.loot.gold += g; log(`${fmtN(g)} ゴールドを てにいれた！`); }
+  if (n('haste')){ for (let i = 0; i < R.cds.length; i++) R.cds[i] = Math.max(0, R.cds[i] - 2.5 * n('haste')); for (const a of R.actors) if (a.kind === 'ally') a.skT = Math.max(0, (a.skT || 0) - 2.5 * n('haste')); }
+  if (n('guard')) R.comboGuard = 6 * n('guard');
+}
+function drawComboFx(f){   // cut-in band along the bottom (the banner sits in the middle of the screen)
+  const t = 1 - f.life / f.max, a = Math.min(1, f.life / 0.3), sc = f.first ? 3 : 2;
+  const slide = Math.min(1, t * 4), cx = W / 2, y = H - 3;
+  ctx.save(); ctx.globalAlpha = a * 0.7; ctx.fillStyle = '#000'; ctx.fillRect(0, y - 13 * sc - 4, W, 13 * sc + 7); ctx.restore();
+  drawSprAt(f.a, cx - 9 - 6 * sc - (1 - slide) * 90, y, false, sc, false, a);
+  drawSprAt(f.b, cx + 9 + 6 * sc + (1 - slide) * 90, y, true, sc, false, a);
+  if (slide >= 1){ drawSprAt('bulb', cx, y - 4 * sc + Math.round(Math.sin(f.life * 12) * 2), false, 2, false, a);
+    if (Math.floor(f.life * 14) % 2){ ctx.globalAlpha = a; ctx.fillStyle = '#ffe14a'; ctx.fillRect(cx - 12, y - 6 * sc - 6, 3, 2); ctx.fillRect(cx + 9, y - 6 * sc - 6, 3, 2); ctx.globalAlpha = 1; } }
+}
+function comboOwnSet(){
+  const s = new Set();
+  for (const al of S.allies){ s.add(al.sp); s.add(comboFam(al.sp)); }
+  return s;
+}
+const comboLabel = k => k === 'hero' ? 'ゆうしゃ' : comboIsBoss(k) ? SP[k].n : SP[k].n + '系';
+function panelCombos(){
+  S.combos = S.combos || {};
+  const own = comboOwnSet(), found = COMBOS.filter(c => S.combos[c.id]).length;
+  let h = `<h3>合体技帖（${found} ／ ${COMBOS.length}）</h3>
+    <p class="hint">ゆうしゃや 仲間が 技を つかったとき、組み合わせの いい 仲間が いっしょに いると、まれに 合体技を ひらめく。いちど ひらめいた 合体技は 出やすくなる。<br>手持ちの 仲間で ためせる 組み合わせは「？？？」の 横に 表示される。</p>`;
+  const grp = {hero:'ゆうしゃと 仲間', ally:'仲間どうし', boss:'ボスと 仲間'};
+  for (const g of ['hero', 'ally', 'boss']){
+    const list = COMBOS.filter(c => c.grp === g);
+    h += `<p style="margin:10px 0 4px;color:var(--dim)">${grp[g]}（${list.filter(c => S.combos[c.id]).length} ／ ${list.length}）</p><div class="list">`;
+    for (const c of list){
+      const got = S.combos[c.id];
+      const can = (c.a === 'hero' || own.has(c.a)) && own.has(c.b);
+      const hint = c.a === 'hero' && !comboIsBoss(c.b) || can;
+      const pair = hint || got ? `${comboLabel(c.a)} ＋ ${comboLabel(c.b)}` : '？？？ ＋ ？？？';
+      h += got
+        ? `<div class="li" style="cursor:default"><div class="body"><div class="t"><span class="r2">${c.n}</span><span class="num">${fmtN(got)}回</span></div><div class="d">${pair} ／ ${comboDesc(c)}</div></div></div>`
+        : `<div class="li locked" style="cursor:default"><div class="body"><div class="t"><span>？？？</span></div><div class="d">${pair}${can ? '　<span style="color:var(--spark)">手持ちの 仲間で ためせる</span>' : ''}</div></div></div>`;
+    }
+    h += `</div>`;
+  }
+  return h;
+}
+
 /* ---------- recruit ---------- */
 function openRecruit(spk, f){
-  if (S.autoRecruit){ se('recruit'); acceptRecruit(spk, f); return; }   // setting: say yes at once, no pause
+  const sp = SP[spk], boss = !!sp.boss;
+  if (S.autoRecruit && !boss){ se('recruit'); acceptRecruit(spk, f); return; }   // setting: say yes at once, no pause (bosses always get their scene)
   R.paused = true;
-  const sp = SP[spk];
-  se('recruit');
-  showModal(`<canvas id="recCv" width="24" height="24"></canvas>
-    <p>${sp.n}が おきあがり<br>なかまに なりたそうに こちらを みている！</p>
+  if (boss){ flash(0.7, '#ffd84a'); se('rare'); setTimeout(() => se('recruit'), 500); } else se('recruit');
+  showModal(`${boss ? '<p class="r5" style="text-align:center;letter-spacing:.15em">★ ボスが おきあがった ★</p>' : ''}<canvas id="recCv" width="24" height="24"${boss ? ' style="filter:drop-shadow(0 0 6px #ffd84a)"' : ''}></canvas>
+    <p>${boss ? `${sp.n}が ゆっくりと おきあがり…<br>しずかに こちらを みつめている。` : `${sp.n}が おきあがり<br>なかまに なりたそうに こちらを みている！`}</p>
     <p class="hint">役割: ${sp.role}（${ROLE_D[sp.role]}） ／ 専用技: ${sp.sk.n}</p>
     <p>なかまに してあげますか？</p>
     ${S.party.includes(null) ? '' : '<p class="hint">パーティが いっぱいなので 控えに 入ります（拠点の 仲間タブで いれかえられる）</p>'}
@@ -3394,7 +3553,7 @@ function drawActor(a, marching){
     const c = getSpr(a.spr); ctx.drawImage(c, -c.width / 2, -c.height / 2); ctx.restore();
     return;
   }
-  drawSprAt(a.spr, a.x + lx, a.y - bob, false, 1, a.hitT > 0 && Math.floor(G.t * 30) % 2 === 0);
+  drawSprAt(a.spr, a.x + lx, a.y - bob, false, a.sc || 1, a.hitT > 0 && Math.floor(G.t * 30) % 2 === 0);
   if (a.kind === 'hero' && R && R.buff > 0 && Math.floor(G.t * 10) % 2) { ctx.fillStyle = '#ff6a3a'; ctx.fillRect(a.x - 7, a.y - 14, 1, 2); ctx.fillRect(a.x + 6, a.y - 10, 1, 2); }
 }
 function drawEnemy(e){
@@ -3416,6 +3575,7 @@ function drawFx(){
   for (const p of G.parts){ ctx.fillStyle = p.col; ctx.fillRect(Math.round(p.x), Math.round(p.y), 1, 1); }
   for (const f of G.fx){
     ctx.strokeStyle = f.col; ctx.fillStyle = f.col;
+    if (f.k === 'combo'){ drawComboFx(f); continue; }
     if (f.k === 'bigbulb'){   // 奥義・ピコーン: a giant light bulb over the field
       const a = Math.min(1, f.life / 0.4), bob = Math.round(Math.sin(f.life * 12) * 2);
       drawSprAt('bulb', W / 2, 74 + bob, false, 6, false, a);
@@ -3601,7 +3761,8 @@ const HELP = {
     'パーティ枠に 入れた 仲間だけが いっしょに たたかう。まずは 枠を えらんでから 控えを タップ。',
     '「合成」で 同じ種族の 控えを 吸収すると ＋が ふえて 強くなる。「まとめて合成」で 余った 仲間を 一気に 合成できる（パーティの 仲間は 素材に ならない）。',
     'ときどき 合体事故が おきて、まったく ちがう 種族に なることが…！',
-    '仲間ごとに 育つ レベルの 上限が ちがう。']},
+    '仲間ごとに 育つ レベルの 上限が ちがう。',
+    'ゆうしゃと 仲間、仲間どうしの 組み合わせで、まれに 合体技を ひらめく。見つけた 合体技は 仲間タブの「合体技帖」で 見られる。']},
   gear:{t:'装備', b:['上の ボタンで「そうび中」「もちもの」「セット」を きりかえる。装備は タップすると くわしく 見られる。',
     'もちものは 部位で しぼりこみ、強い順・レア度順・新しい順に ならべかえられる。「▲だけ」で 今より 強い ものだけ 表示。',
     '「おすすめ装備」は 今の ジョブに 合わせて 強い ものを そうびする。「弱い装備を まとめて売る」で 持ち物を すっきり。',
@@ -3748,9 +3909,14 @@ function panelSkill(){
   }
   return h + `</div>`;
 }
+let ALLYP = 'party';   // 仲間タブ: パーティ・控え / 合体技帖
 function panelAlly(){
+  S.combos = S.combos || {};
+  const found = COMBOS.filter(c => S.combos[c.id]).length;
+  const sub = `<div class="row">${[['party', 'パーティ・控え'], ['combo', `合体技帖（${found}／${COMBOS.length}）`]].map(([k, n]) => `<button class="btn ${ALLYP === k ? 'primary' : ''}" style="${ALLYP === k ? 'font-size:13px;padding:7px 12px' : ''}" data-act="allyP" data-k="${k}">${n}</button>`).join('')}</div>`;
+  if (ALLYP === 'combo') return sub + panelCombos();
   const inParty = new Set(S.party.filter(Boolean));
-  let h = `<h3>パーティ（${partySize()}枠）</h3><p class="hint">仲間をえらんでから、入れたい枠をタップ。枠をえらんでから控えをタップしても入れかわる。<br>「合成」で 同じ種族の 控えを 吸収して ＋を ふやせる。ごくまれに 合体事故が おこる…。</p><div class="list">`;
+  let h = sub + `<h3>パーティ（${partySize()}枠）</h3><p class="hint">仲間をえらんでから、入れたい枠をタップ。枠をえらんでから控えをタップしても入れかわる。<br>「合成」で 同じ種族の 控えを 吸収して ＋を ふやせる。ごくまれに 合体事故が おこる…。</p><div class="list">`;
   for (let i = 0; i < partySize(); i++){
     const al = S.party[i] && allyById(S.party[i]);
     h += al ? allyRow(al, `pslot-${i}`, selAlly === `p${i}`) :
@@ -4163,6 +4329,7 @@ function panelCards(){
 function panelCfg(){
   return `<h3>あそびかた</h3>
     <label class="toggle"><span>仲間が おきあがったら すぐ「はい」（3秒 待たない）</span><input type="checkbox" data-act="autoRec" ${S.autoRecruit ? 'checked' : ''}></label>
+    <label class="toggle"><span>合体技の 演出を 見せる（オフにすると 止まらずに すぐ 発動）</span><input type="checkbox" data-act="comboFx" ${S.comboFx !== false ? 'checked' : ''}></label>
     <label class="toggle"><span>拾った 弱い装備を 自動で 売る</span><input type="checkbox" data-act="autoSell" ${S.autoSellWeak ? 'checked' : ''}></label>
     <p class="hint" style="margin:0">ダメージの 数字（重いと 感じたら 減らしてね）</p>
     <div class="row">${[['all', 'すべて'], ['crit', '会心だけ'], ['off', '出さない']].map(([k, n]) => `<button class="btn sm ${(S.dmgNum || 'all') === k ? 'primary' : ''}" data-act="dmgNum" data-k="${k}">${n}</button>`).join('')}</div>
@@ -4475,6 +4642,7 @@ $('#panel').addEventListener('click', e => {
     case 'saveIn': openSaveIn(); return;
     case 'helpReset': S.seenHelp = {}; save(); toast('各画面を ひらくと 説明が もう一度 出る'); break;
     case 'town': TOWN = b.dataset.k; se('ui'); break;
+    case 'allyP': ALLYP = b.dataset.k; selAlly = null; se('ui'); $('#panel').scrollTop = 0; break;
     case 'facUp': {
       const k = b.dataset.k, l = facLv(k); if (l >= FAC[k].max) break;
       const cost = FAC[k].cost[l]; if (S.gold < cost) break;
@@ -4576,6 +4744,7 @@ $('#panel').addEventListener('change', e => {
   if (act === 'autoDive') S.autoDive = t.checked;
   if (act === 'flIn'){ const v = Math.floor(+t.value); S.selFloor = clamp(isFinite(v) && v > 0 ? v : 1, 1, S.maxFloor + 1); renderCamp(); }
   if (act === 'autoRec') S.autoRecruit = t.checked;
+  if (act === 'comboFx'){ S.comboFx = t.checked; save(); }
   if (act === 'autoSell'){ S.autoSellWeak = t.checked; save(); renderCamp(); }
   if (act === 'star'){ craftStar = t.checked; renderCamp(); }
   if (act === 'snd'){ S.snd.on = t.checked; auInit(); auVol(); }
