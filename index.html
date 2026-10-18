@@ -1344,11 +1344,22 @@ function refreshAllyCaps(){ for (const al of S.allies){ al.capped = al.lv >= all
 const rollMaxLv = () => 30 + Math.floor((ALLY_MAX_LV - 30) * Math.pow(Math.random(), 2.5));   // most land 30–300, a lucky few near 999
 const PLUS_STEP = 0.03;   // each +1 from fusion: +3% HP and attack
 const allyName = al => al.name + (al.plus ? `+${al.plus}` : '');
-function allyStats(al){
-  const sp = SP[al.sp], L = al.lv, pm = 1 + PLUS_STEP * (al.plus || 0);
+/* Allies grow on the same curve as the enemies: an ally of level L is as strong as a floor-(L/3) monster,
+   but never stronger than the floor it is fighting on (so huge deep levels don't make allies invincible).
+   Against same-floor foes: about 3 x HP-multiplier hits to fall, about 4-5 hits (x attack multiplier) to fell one.
+   The old linear formula stays as a floor, so the early game is unchanged. */
+const ALLY_HP_K = 3, ALLY_ATK_K = 0.22;
+const allyRefFloor = () => R ? R.floor : Math.max(1, (S.maxFloor || 0) + 1);   // in town: judge by the deepest floor reached, so the numbers don't jump with the sortie selector
+function allyStats(al, fRef = allyRefFloor()){
+  const sp = SP[al.sp], L = al.lv, pm = 1 + PLUS_STEP * (al.plus || 0), am = sp.allyMul || 1;
+  const hp0 = 45 * Math.max(sp.hp, 1) * am * (1 + 0.2 * (L-1)) * al.g.hp * pm;
+  const atk0 = 7 * sp.atk * am * (1 + 0.24 * (L-1)) * al.g.atk * pm;
+  const lf = clamp(L / 3, 1, Math.max(1, fRef));
+  const hp1 = ALLY_HP_K * 6 * gAtk(lf) * sp.hp * am * al.g.hp * pm;
+  const atk1 = ALLY_ATK_K * 12 * gHP(lf) * sp.atk * am * al.g.atk * pm;
   return {
-    hp: Math.round(45 * Math.max(sp.hp, 1) * (sp.allyMul || 1) * (1 + 0.2 * (L-1)) * al.g.hp * pm),
-    atk: Math.round(7 * sp.atk * (sp.allyMul || 1) * (1 + 0.24 * (L-1)) * al.g.atk * pm),
+    hp: Math.round(Math.min(NUM_CAP / 1e6, Math.max(hp0, hp1))),
+    atk: Math.round(Math.min(ATK_CAP, Math.max(atk0, atk1))),
     def: Math.round((2 + 0.9 * (L-1)) * Math.sqrt(sp.hp)),
     int: sp.int,
   };
@@ -3133,7 +3144,7 @@ function allySkill(a){
   if (sk.kind === 'heal'){
     const t = R.actors.filter(x => !x.dead).sort((p, q) => p.hp / p.max - q.hp / q.max)[0];
     if (!t || t.hp / t.max > 0.75) return false;
-    const h = Math.round(t.max * sk.mul + a.atk);
+    const h = Math.round(t.max * sk.mul + Math.min(a.atk, t.max * 0.25));
     t.hp = Math.min(t.max, t.hp + h);
     floater(t.x, t.y - 16, h, '#7cf08a', 1); burst(t.x, t.y - 8, '#7cf08a', 8, 20);
     log(`${a.name}の ${sk.n}！`); se('heal');
@@ -3221,7 +3232,7 @@ function fuseAllies(baseId, matId){
   return {a, acc};
 }
 /* Bulk fusion: fold every reserve ally of a species into its best one (a party member if there is one). */
-const allyPow = a => { const st = allyStats(a); return st.hp * st.atk; };
+const allyPow = a => { const st = allyStats(a, 1); return st.hp * st.atk * Math.max(1, a.lv); };   // rank by level-weighted base, not the floor-capped value
 function bulkPlan(spk){
   const all = S.allies.filter(a => a.sp === spk); if (all.length < 2) return null;
   const inParty = new Set(S.party.filter(Boolean));
