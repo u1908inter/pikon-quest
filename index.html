@@ -3759,7 +3759,7 @@ const HELP = {
     '系統には 得意な ジョブが ある（竜騎士＝槍、魔法使い・魔法剣士＝魔法、狩人＝弓：威力 +20%）。',
     'いちばん下の「かくし技」は、バトル画面を 指で なぞって 出す（何回か はじいても OK）。手がかりを たよりに さがしてみよう。']},
   ally:{t:'仲間', b:['たおした まものが おきあがったら、仲間に できる。仲間の数に 上限は ない。設定で「すぐ はい」にも できる。',
-    'パーティ枠に 入れた 仲間だけが いっしょに たたかう。まずは 枠を えらんでから 控えを タップ。',
+    'パーティ枠に 入れた 仲間だけが いっしょに たたかう。控えの 仲間の「パーティへ」で 空き枠に 入れられる（種族の ▶ を おすと 1体ずつ 表示）。',
     '「合成」で 同じ種族の 控えを 吸収すると ＋が ふえて 強くなる。「まとめて合成」で 余った 仲間を 一気に 合成できる（パーティの 仲間は 素材に ならない）。',
     'ときどき 合体事故が おきて、まったく ちがう 種族に なることが…！',
     '仲間ごとに 育つ レベルの 上限が ちがう。',
@@ -3917,13 +3917,16 @@ function panelAlly(){
   const sub = `<div class="row">${[['party', 'パーティ・控え'], ['combo', `合体技帖（${found}／${COMBOS.length}）`]].map(([k, n]) => `<button class="btn ${ALLYP === k ? 'primary' : ''}" style="${ALLYP === k ? 'font-size:13px;padding:7px 12px' : ''}" data-act="allyP" data-k="${k}">${n}</button>`).join('')}</div>`;
   if (ALLYP === 'combo') return sub + panelCombos();
   const inParty = new Set(S.party.filter(Boolean));
-  let h = sub + `<h3>パーティ（${partySize()}枠）</h3><p class="hint">仲間をえらんでから、入れたい枠をタップ。枠をえらんでから控えをタップしても入れかわる。<br>「合成」で 同じ種族の 控えを 吸収して ＋を ふやせる。ごくまれに 合体事故が おこる…。</p><div class="list">`;
+  const guide = selAlly && selAlly[0] === 'p' ? '▶ 控えから 入れたい 仲間を タップ（種族の ▶ を おすと 1体ずつ 表示）'
+    : selAlly && selAlly[0] === 'r' ? '▶ 入れたい 枠を タップ（パーティの 仲間と 入れかわる）' : '';
+  const guideH = guide ? `<p style="margin:6px 0;padding:6px 10px;border:1px solid var(--spark);border-radius:6px;color:var(--spark);font-size:13px">${guide}</p>` : '';
+  let h = sub + `<h3>パーティ（${partySize()}枠）</h3><p class="hint">控えの「パーティへ」を おすと 空き枠に 入る。枠を タップしてから 控えの 仲間を タップしても 入れかわる。枠の 仲間を 2回 タップすると 控えに もどる。<br>「合成」で 同じ種族の 控えを 吸収して ＋を ふやせる。ごくまれに 合体事故が おこる…。</p>${guideH}<div class="list">`;
   for (let i = 0; i < partySize(); i++){
     const al = S.party[i] && allyById(S.party[i]);
     h += al ? allyRow(al, `pslot-${i}`, selAlly === `p${i}`) :
       `<button class="li ${selAlly === `p${i}` ? 'sel' : ''}" data-act="pslot" data-i="${i}"><div class="body"><div class="t"><span>― あき ―</span></div><div class="d">枠${i + 1}</div></div></button>`;
   }
-  h += `</div><h3>控え（${S.allies.length - inParty.size}体 ／ なかま ぜんぶで ${S.allies.length}体）</h3><div class="list">`;
+  h += `</div>${guideH}<h3>控え（${S.allies.length - inParty.size}体 ／ なかま ぜんぶで ${S.allies.length}体）</h3><div class="list">`;
   const res = S.allies.filter(a => !inParty.has(a.id));
   if (!res.length) h += `<p class="hint">倒した まものが ときどき おきあがって なかまに なる。</p>`;
   else {
@@ -3964,10 +3967,10 @@ function allyRow(al, key, sel){
 }
 function allyRowCompact(al, sel){
   const st = allyStats(al), conf = confirmKey === 'bye' + al.id;
-  return `<div class="li ${sel ? 'sel' : ''}" data-act="res" data-i="-1" data-id="${al.id}" role="button" tabindex="0" style="align-items:center;padding:5px 8px">
-    <div class="body"><div class="t"><span>${esc(allyName(al))}</span><span class="num">Lv${fmtN(al.lv)}${al.capped ? '<span class="tag" style="color:var(--hpl)">限界</span>' : ''}</span></div>
+  return `<div class="li ${sel ? 'sel' : ''}" data-act="res" data-i="-1" data-id="${al.id}" role="button" tabindex="0" style="align-items:center;padding:5px 8px;flex-wrap:wrap;row-gap:4px">
+    <div class="body" style="min-width:58%"><div class="t"><span>${esc(allyName(al))}</span><span class="num">Lv${fmtN(al.lv)}${al.capped ? '<span class="tag" style="color:var(--hpl)">限界</span>' : ''}</span></div>
     <div class="d num">${al.accident ? '<span class="tag" style="color:#ff8a9a;margin-left:0">事故</span> ' : ''}HP ${fmtN(st.hp)} ／ 攻 ${fmtN(st.atk)} ／ 守 ${fmtN(st.def)}</div></div>
-    <div class="row" style="flex:none;gap:4px"><button class="btn sm" data-act="fuse" data-id="${al.id}">合成</button><button class="btn sm ${conf ? 'danger' : ''}" data-act="bye" data-id="${al.id}">${conf ? '本当に' : 'わかれる'}</button></div></div>`;
+    <div class="row" style="flex:none;gap:4px;margin-left:auto"><button class="btn sm primary" data-act="toParty" data-id="${al.id}">パーティへ</button><button class="btn sm" data-act="fuse" data-id="${al.id}">合成</button><button class="btn sm ${conf ? 'danger' : ''}" data-act="bye" data-id="${al.id}">${conf ? '本当に' : 'わかれる'}</button></div></div>`;
 }
 function paintAllyIcons(){
   document.querySelectorAll('canvas[data-icon]').forEach(c => {
@@ -4602,6 +4605,14 @@ $('#panel').addEventListener('click', e => {
       else { const empty = S.party.indexOf(null); if (empty >= 0 && selAlly === `r${id}`){ S.party[empty] = id; selAlly = null; save(); } else selAlly = `r${id}`; }
       se('ui'); break; }
     case 'fuse': e.stopPropagation(); openFusePicker(+b.dataset.id); return;
+    case 'toParty': {   // reserve -> first empty slot; if the party is full, pick the slot to swap with
+      e.stopPropagation();
+      const id = +b.dataset.id, empty = S.party.indexOf(null);
+      if (empty >= 0){ S.party[empty] = id; selAlly = null; save(); }
+      else selAlly = `r${id}`;
+      se('ui'); renderCamp();
+      if (empty < 0){ const t = $('#panel h3'); if (t) t.scrollIntoView({block:'start', behavior:'smooth'}); }
+      return; }
     case 'bye': {
       e.stopPropagation();
       const id = +b.dataset.id;
