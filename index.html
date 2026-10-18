@@ -141,6 +141,7 @@ button{font:inherit;color:inherit}
 .li .body{flex:1;min-width:0}
 .li .t{display:flex;justify-content:space-between;gap:8px}
 .li .t > span:first-child{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.li .t > .num{white-space:nowrap;flex:none}
 .li .d{font-size:12px;color:var(--dim)}
 .li.locked{cursor:default;color:var(--dim);border-style:dashed}
 .li.grp{border-color:#55586a;background:#0e1018}
@@ -3956,16 +3957,16 @@ function allyRow(al, key, sel){
   const conf = confirmKey === 'bye' + al.id;
   return `<div class="li ${sel ? 'sel' : ''}" data-act="${inP >= 0 ? 'pslot' : 'res'}" data-i="${inP}" data-id="${al.id}" role="button" tabindex="0">
     <canvas width="16" height="16" data-icon="${sp.spr}"></canvas>
-    <div class="body"><div class="t"><span>${esc(allyName(al))}<span class="tag" style="color:var(--dim)">${sp.n}</span>${al.accident ? '<span class="tag" style="color:#ff8a9a">事故</span>' : ''}</span><span class="num">Lv${fmtN(al.lv)}${al.capped ? '<span class="tag" style="color:var(--hpl)">限界</span>' : ''}</span></div>
-    <div class="d">${sp.role} ／ HP ${fmtN(st.hp)} 攻 ${fmtN(st.atk)} 守 ${fmtN(st.def)} ／ 技: ${sp.sk.n}</div>
+    <div class="body"><div class="t"><span>${esc(allyName(al))}</span><span class="num" style="white-space:nowrap">Lv${fmtN(al.lv)}${al.capped ? '<span class="tag" style="color:var(--hpl)">限界</span>' : ''}</span></div>
+    <div class="d"><span class="tag" style="color:var(--dim);margin-left:0">${sp.n}</span>${al.accident ? '<span class="tag" style="color:#ff8a9a">事故</span>' : ''} ${sp.role} ／ HP ${fmtN(st.hp)} 攻 ${fmtN(st.atk)} 守 ${fmtN(st.def)} ／ 技: ${sp.sk.n}</div>
     <div class="row" style="margin-top:4px"><button class="btn sm" data-act="fuse" data-id="${al.id}">合成</button>${inP < 0 ? `<button class="btn sm ${conf ? 'danger' : ''}" data-act="bye" data-id="${al.id}">${conf ? '本当に わかれる' : 'わかれる'}</button>` : ''}</div>
     </div></div>`;
 }
 function allyRowCompact(al, sel){
   const st = allyStats(al), conf = confirmKey === 'bye' + al.id;
   return `<div class="li ${sel ? 'sel' : ''}" data-act="res" data-i="-1" data-id="${al.id}" role="button" tabindex="0" style="align-items:center;padding:5px 8px">
-    <div class="body"><div class="t"><span>${esc(allyName(al))}${al.accident ? '<span class="tag" style="color:#ff8a9a">事故</span>' : ''}</span><span class="num">Lv${fmtN(al.lv)}${al.capped ? '<span class="tag" style="color:var(--hpl)">限界</span>' : ''}</span></div>
-    <div class="d num">HP ${fmtN(st.hp)} ／ 攻 ${fmtN(st.atk)} ／ 守 ${fmtN(st.def)}</div></div>
+    <div class="body"><div class="t"><span>${esc(allyName(al))}</span><span class="num">Lv${fmtN(al.lv)}${al.capped ? '<span class="tag" style="color:var(--hpl)">限界</span>' : ''}</span></div>
+    <div class="d num">${al.accident ? '<span class="tag" style="color:#ff8a9a;margin-left:0">事故</span> ' : ''}HP ${fmtN(st.hp)} ／ 攻 ${fmtN(st.atk)} ／ 守 ${fmtN(st.def)}</div></div>
     <div class="row" style="flex:none;gap:4px"><button class="btn sm" data-act="fuse" data-id="${al.id}">合成</button><button class="btn sm ${conf ? 'danger' : ''}" data-act="bye" data-id="${al.id}">${conf ? '本当に' : 'わかれる'}</button></div></div>`;
 }
 function paintAllyIcons(){
