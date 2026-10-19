@@ -2783,7 +2783,7 @@ function track(k, title){
 }
 function trackFloor(f){
   if (f === CLEAR_FLOOR) track('clear', 'F' + f + 'クリア（ゲームクリア）');
-  else if (f === 5 || (f < 1000 ? f % 10 === 0 : f % 100 === 0)) track('f' + f, 'F' + f + '突破');   // every 10 floors, every 100 from F1000
+  else if (f === 5 || f % 100 === 0) track('f' + f, 'F' + f + '突破');   // F5, then every 100 floors
 }
 function floorClear(){
   R.phase = 'clear'; R.endT = 2.6; R.loot.floors++;
