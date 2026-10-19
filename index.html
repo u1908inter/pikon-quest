@@ -464,7 +464,7 @@ const SK = {
   arrowrain:{n:'矢の雨',  tree:'弓', parent:'rapid',     req:120, cd:7,   kind:'random', mul:0.9, hits:10, fx:'hit', d:'矢を 10本 降らせる'},
   issen:   {n:'一閃の矢', tree:'弓', parent:'kagenui',   req:150, cd:7,   kind:'line',   mul:3.5, fx:'slash', d:'一列を 貫く 矢'},
   // --- the F3000 gift: never sparked, handed over in the 開発室
-  pikon:   {n:'奥義・ピコーン', tree:'ひらめき', parent:null, req:9999, special:true, cd:20, kind:'all', mul:4, pct:0.3, pikon:true, fx:'bolt', d:'巨大な ひらめきの 光。画面の 敵 すべてに、残りHPの 30%（★ごとに +5%）＋攻撃力×4'},
+  pikon:   {n:'奥義・ピコーン', tree:'ひらめき', parent:null, req:9999, special:true, cd:20, kind:'all', mul:4, pct:0.3, pikon:true, fx:'bolt', d:'巨大な ひらめきの 光。画面の 敵 すべてに、残りHPの 30%（★ごとに +5%、最低でも 最大HPの 5%）＋攻撃力×4'},
   ryusei:  {n:'奥義・流星', tree:'弓', parent:'arrowrain', req:250, cd:15, kind:'random', mul:1.5, hits:15, fx:'bolt', d:'流れ星のような 15連射'},
 };
 const TREES = ['剣', '体術', '槍', '魔法', '弓', 'ひらめき'];
@@ -576,6 +576,10 @@ for (const k in ABYSS_BOSS_DEF){
 }
 const abyssBossFor = f => { if (f < 1000 || f % 100) return null;
   const ks = Object.keys(ABYSS_BOSS_DEF).filter(k => f >= ABYSS_BOSS_DEF[k].f); return ks.length ? ks[(f / 100) % ks.length] : null; };
+/* F10000 最後のボス「消灯王 無明電球」: a giant dark light bulb that eats ひらめき */
+SPR.mumyo = {pal:{k:'#0e0a14', G:'#2c2440', D:'#1a1428', g:'#5a4a88', w:'#c8c0e8', R:'#ff3050', r:'#ff9aa8', M:'#6a6878', m:'#44424e', Y:'#e8c040'}, rows:[".........Y..YY..Y.........", ".........YY.YY.YY.........", ".........YYYYYYYY.........", ".........YYRYYRYY.........", "........kkkkkkkkk.........", "......kkGGGGGGGGGkk.......", ".....kGGGGGGGGGGGGGk......", "....kGGGwgGGGGGGGGGGk.....", "...kGGGwgGGGGGGGGGGGGk....", "..kGGGwgGGGGGGGGGGGGGGk...", "..kGGGwGGDDDDDDDGGGGGGk...", ".kGGGwwGDDDDDDDDDGGGGGGk..", ".kGGGwGDDDDDDDDDDDGGGGGk..", ".kGGGGGDDrDDDDDDrDGGGGGk..", ".kGGGGGDRRDDDDDDRRGGGGGk..", "kGGGGGGDDRRDDDDRRDGGGGGGk.", ".kGGGGGDDDDDDDDDDDGGGGGk..", ".kGGGGGDDDDDDDDDDDGGGGGk..", ".kGGGGGDDDDDDDDDDDGGGGGk..", "..kGGGGGRDRDRDRDRGGGGGk...", "..kGGGGGGRDRDRDRGRGGGGk...", "...kGGGGGGGGGGGGGGGGGk....", "...kGGGGGGGGGGGGGGGGGk....", "....kGGGGGGGGGGGGGGGk.....", ".....kGGGGGGGGGGGGGk......", ".....kGmmmmmmmmmmmmk......", "......kMMMMMMMMMMMMk......", "......kmmmmmmmmmmmmk......", "......kMMMMMMMMMMMMk......", "......kmmmmmmmmmmmmk......", "......kMMMMMMMMMMMMk......", "......kmmmmmmmmmmmmk......", ".......kkmmmmmmmmkk.......", ".........kkkkkkkk.........", "..........kkkkkk.........."]};
+SP.mumyo = {n:'消灯王 無明電球', spr:'mumyo', hp:40, atk:3.2, spd:8, int:1.4, exp:30, rate:1e9, role:'範囲', boss:true, finalBoss:true, area:9, names:['ムミョウ'],
+            sk:{n:'消灯', cd:6, kind:'all', mul:2.5, fx:'wave'}, atkName:'消灯の いかずち', big:true};
 const RARE_CHANCE = 0.04;   // per normal wave
 
 /* Jobs (FF5 style). JP from kills; abilities unlock by job level; Lv5 = master.
@@ -693,7 +697,7 @@ const JOBS = {
     A('ヘイスト',     'atk', '攻撃速度 +10%',                       s => s.aspd += 10),
     A('スロウ',       'def', '敵の 攻撃間隔 +20%',                  s => s.pw.slow = true),
     A('クイック',     'spc', '技の再使用 -10%',                     s => s.cdr += 10),
-    A('グラビデ',     'atk', '技が ボスの 残りHPの 3%を 追加で 削る', s => s.pw.gravity = true),
+    A('グラビデ',     'atk', '技が ボスの 残りHPの 3%（最低でも 最大HPの 0.05%）を 追加で 削る', s => s.pw.gravity = true),
     A('ヘイスガ',     'spc', '仲間の 攻撃速度 +15%',                s => add(s.pw, 'allyAspd', 15)),
     A('ストップ',     'atk', '技が当たった敵を 5%で 3秒 停止',       s => add(s.pw, 'stopChance', 5)),
     A('メテオ',       'atk', '30秒ごとに 隕石が 全体に 攻撃力×6',     s => s.pw.meteor = true),
@@ -955,6 +959,7 @@ const LEGEND = {
   konton:   {boss:'vslime',  slot:'head',   n:'こんとんの冠', p:'技ダメージ +80%、技の再使用 -10%', fx:s => { s.skill += 80; s.cdr += 10; }},
   hoshikui: {boss:'vgolem',  slot:'body',   n:'ほしくいの鎧', p:'最大HP +50%、受けるダメージ -30%', fx:s => { s.hpPct += 50; s.pw.dmgCut = Math.max(s.pw.dmgCut || 0, 30); }},
   abyssfang:{boss:'vdragon', slot:'weapon', n:'深淵竜の牙',   p:'攻撃力 +50%、会心の倍率 +1.0（ふだん ×1.8 → ×2.8）', fx:s => { s.atkPct += 50; add(s.pw, 'critPlus', 1); }},
+  mumyou: {boss:null,     slot:'acc',    n:'無明の灯',           p:'ひらめき率 2倍、技ダメージ +100%、受けるダメージ -20%', fx:s => { s.spark += 100; s.skill += 100; s.pw.dmgCut = Math.max(s.pw.dmgCut || 0, 20); }},
   dheart: {boss:'dragon', slot:'acc',    n:'ドラゴンハート',     p:'熟練度の伸び 2倍、技の再使用 -20%', fx:s => { s.pw.mastery2 = true; s.cdr += 20; }},
 };
 const ROLE_D = {'回復':'弱った仲間を回復','範囲':'敵全体を攻撃','前衛':'正面の敵に強打','速攻':'攻撃間隔が短い','妨害':'敵を眠らせて足止め','壁':'敵の攻撃を引きつける'};
@@ -2078,8 +2083,16 @@ function spawnWave(){
   const pool = Object.keys(SP).filter(k => !SP[k].boss && !SP[k].rare && SP[k].area === area && SP[k].minF <= cycF(f));
   if (R.wave > R.waves){
     R.isBoss = true;
-    const bk = abyssBossFor(f) || bossOfArea(area);
-    R.enemies.push(makeEnemy(bk, f, true, 214, 104));
+    const final = f === TRUE_CLEAR_FLOOR;
+    const bk = final ? 'mumyo' : abyssBossFor(f) || bossOfArea(area);
+    R.enemies.push(makeEnemy(bk, f, true, final ? 170 : 214, 104));   // the giant last boss starts fully on screen
+    if (final){   // the last boss comes alone, after the lights go out
+      flash(1, '#000000'); R.shake = 1.2; se('boom');
+      banner('…あたりの 光が ふっと 消えた', 'warn', 1500);
+      setTimeout(() => { if (R){ banner(`最後の ボス<b>消灯王 無明電球</b><small>ひらめきを 喰らう 闇の 王</small>`, 'legend', 2600); se('warn'); } }, 1500);
+      log('消灯王 無明電球が あらわれた！');
+      playSong('boss5'); R.phase = 'fight'; return;
+    }
     if (SP[bk].abyssBoss) setTimeout(() => { if (R) banner(`深淵ボス<b>${SP[bk].n}</b>`, 'legend', 1800); }, 900);
     for (let i = 0; i < (f > CLEAR_FLOOR ? 6 : 3); i++) R.enemies.push(makeEnemy(pick(pool), f, false, 205 + i * 8, rnd(88, 112)));
     banner('ボスが あらわれた！', 'warn', 1500); se('warn'); playSong(pick(area === 3 ? ['boss2', 'boss3', 'boss4', 'boss5'] : ['boss', 'boss3']));
@@ -2104,7 +2117,7 @@ function makeEnemy(k, f, boss, x, y){
   const sp = SP[k], g = gHP(f), ga = gAtk(f);
   let hp = 12 * sp.hp * g, atk = 6 * sp.atk * ga;
   if (boss){ hp *= 8; atk *= 1.4; }
-  const c = getSpr(sp.spr), sc = boss ? (sp.big ? 2.5 : 2) : 1;
+  const c = getSpr(sp.spr), sc = boss ? (sp.finalBoss ? 2.6 : sp.big ? 2.5 : 2) : 1;
   return {sp:k, boss, x, y, hp:Math.round(hp), max:Math.round(hp), atk, int:sp.int * rnd(0.9, 1.1), spd:sp.spd * rnd(0.85, 1.15),
           atkT:rnd(0.5, 1.5), stun:0, burn:0, burnTick:0, burnDmg:0, hitT:0, lunge:0, dead:false, fade:0,
           sc, h:c.height * sc, w:c.width * sc, charge:0, chargeT:6,
@@ -2128,6 +2141,7 @@ function update(dt){
   if (R.shake > 0) R.shake -= dt;
   if (R.buff > 0) R.buff -= dt;
   if (R.comboCd > 0) R.comboCd -= dt;
+  if (R.seal > 0) R.seal -= dt;
   if (R.comboGuard > 0) R.comboGuard -= dt;
   if (R.comboShow && !G.fx.some(f => f.k === 'combo')) R.comboShow = false;
   for (let i = 0; i < nSlots(); i++) if (R.cds[i] > 0) R.cds[i] -= dt;
@@ -2267,18 +2281,33 @@ function heroNormal(a, tgt){
 const berserkMul = a => (a && a.kind === 'hero' ? ((R.hs.pw.oni && a.hp < a.max * 0.3) ? 2 : 1) * ((R.hs.pw.toushi && a.hp < a.max * 0.5) ? 1.3 : 1) : 1);
 const holyMul = e => (R.hs.pw.holy && (family(e.sp) === 'skel' || SP[e.sp].area === 3)) ? 1.5 : 1;
 function healActor(a, h){ h = Math.round(h); if (h < 1 || a.dead) return; a.hp = Math.min(a.max, a.hp + h); }
+function finalBossPhase(e, dt){   // 消灯王: gets nastier at 2/3 and 1/3 HP; in the last third it seals skills now and then
+  const r = e.hp / e.max, ph = r < 1 / 3 ? 3 : r < 2 / 3 ? 2 : 1;
+  if (ph > (e.phase || 1)){
+    e.phase = ph; flash(1, '#000000'); R.shake = 0.8; se('boom');
+    banner(ph === 2 ? '無明電球の 光が しずんでいく…<small>攻撃が はげしくなった！</small>' : 'あたりが 闇に のまれた…<small>ひらめきを 封じてくる！</small>', 'warn', 2200);
+    log(ph === 2 ? '消灯王の 攻撃が はげしくなった！' : '消灯王は ひらめきを 封じはじめた！');
+    e.chargeT = Math.min(e.chargeT, 2.5); e.sealT = 4;
+  }
+  if ((e.phase || 1) >= 3 && !(R.seal > 0)){
+    e.sealT = (e.sealT == null ? 4 : e.sealT) - dt;
+    if (e.sealT <= 0){ e.sealT = rnd(11, 14); R.seal = 3; flash(0.6, '#1a0a2a'); se('warn');
+      banner('ひらめき封じ！<small>3秒間 技が つかえない（かくし技は つかえる）</small>', 'warn', 1500); log('消灯王の ひらめき封じ！ 技が つかえない…'); }
+  }
+}
 function bossAI(e, dt){
+  if (SP[e.sp].finalBoss) finalBossPhase(e, dt);
   if (e.charge > 0){
     e.charge -= dt;
     if (e.charge <= 0){
       flash(0.5, '#ff4030'); R.shake = 0.4; se('boom');
       log(`${e.name}の ${SP[e.sp].atkName}！`);
-      for (const a of R.actors) if (!a.dead){ hurtActor(a, e.atk * 2.2 * (R.hs.pw.kagami ? 0.5 : 1), e); burst(a.x, a.y - 6, '#ff8a2a', 5, 30); }
+      for (const a of R.actors) if (!a.dead){ hurtActor(a, e.atk * 2.2 * ((e.phase || 1) >= 3 ? 1.3 : 1) * (R.hs.pw.kagami ? 0.5 : 1), e); burst(a.x, a.y - 6, '#ff8a2a', 5, 30); }
     }
     return;
   }
   e.chargeT -= dt;
-  if (e.chargeT <= 0){ e.charge = 2.2; e.chargeT = rnd(8, 11); banner(`${e.name}は ちからを ためている！<br><small>いま 技を当てれば ひるむ</small>`, 'warn', 1600); se('warn'); return; }
+  if (e.chargeT <= 0){ e.charge = 2.2; e.chargeT = rnd(8, 11) * ((e.phase || 1) >= 2 ? 0.6 : 1); banner(`${e.name}は ちからを ためている！<br><small>いま 技を当てれば ひるむ</small>`, 'warn', 1600); se('warn'); return; }
   e.atkT -= dt; if (e.atkT <= 0){ e.atkT = e.int; enemyHit(e, 1); }
 }
 function enemyHit(e, mul){
@@ -2361,6 +2390,18 @@ function killEnemy(e){
   const drops = e.boss ? 2 : (Math.random() < 0.07 * (hs.pw.charmDrop ? 2 : 1) * (hs.pw.dropMul || 1) * (hs.pw.appraisal ? 1.3 : 1) ? 1 : 0);
   for (let i = 0; i < drops; i++) gainItem(genItem(f, e.boss), e);
   if (e.boss) $('#bossbar').hidden = true;
+  if (SP[e.sp].finalBoss){   // 消灯王: a big finale, and the first kill always leaves 無明の灯 (later ones 10%)
+    S.finalKills = (S.finalKills || 0) + 1;
+    flash(1, '#ffffff'); R.shake = 1.4; se('boom'); setTimeout(() => se('pikon'), 300);
+    for (let i = 0; i < 6; i++) burst(e.x + rnd(-20, 20), e.y - rnd(10, 70), pick(['#ffe14a', '#ffffff', '#b8a0ff']), 14, 60);
+    G.fx.push({k:'bigbulb', life:1.6, col:'#ffe14a'});
+    log('消灯王 無明電球は くだけちった…　あたりに 光が もどった！');
+    if (S.finalKills === 1 || Math.random() < 0.1){
+      const it = genLegend('mumyou', f); addInv(it); R.loot.items++; R.loot.legends = (R.loot.legends || 0) + 1;
+      setTimeout(() => { if (R) banner(`消灯王を たおした！<b>${it.name}</b><small>伝説の装備</small>`, 'legend', 2600); se('card'); }, 900);
+      log(`消灯王は <span class="r5">${it.name}</span> を のこした！`);
+    } else setTimeout(() => { if (R) banner('消灯王を たおした！', 'legend', 2200); }, 900);
+  }
   if (SP[e.sp].abyssBoss){   // 深淵ボス: the first kill always drops its legend, later ones 5%
     if (!S.abyssBoss) S.abyssBoss = {};
     const first = !S.abyssBoss[e.sp]; S.abyssBoss[e.sp] = (S.abyssBoss[e.sp] || 0) + 1;
@@ -2400,6 +2441,7 @@ function killEnemy(e){
   if (e.boss || (!e.rare && Math.random() < 0.004 * (hs.pw.boxx2 ? 2 : 1))){ S.boxes++; R.loot.boxes++; log('<span class="r1">青箱</span> を てにいれた'); burst(e.x, e.y - 6, '#4a8cff', 8, 25); }
   // recruit roll
   const sp0 = SP[e.sp], bossRec = sp0.boss;
+  if (sp0.finalBoss) return;   // 消灯王 never joins
   // bosses: about 1/30 (abyss bosses 1/15, they are rare), and every miss makes the next one a little likelier
   const baseDen = bossRec ? (sp0.abyssBoss ? 15 : 30) / (1 + 0.15 * ((S.bossMiss || {})[e.sp] || 0)) : sp0.rate * BAL.recruitMul;
   const denom = baseDen / (S.dbg.recruit ? 10 : 1) / (hs.pw.tame ? 2 : 1) / (hs.pw.charmTame ? 2 : 1) / (hs.pw.call ? 1.5 : 1);
@@ -3024,6 +3066,7 @@ function useSkill(i, manual){
   const id = S.slots[i];
   if (!id || !R || R.phase !== 'fight' || R.paused || R.freeze > 0) return;
   if (R.actors[0].dead || R.cds[i] > 0) return;
+  if (R.seal > 0){ if (manual) callout('技が 封じられている…'); return; }
   const def = SK[id];
   if (def.kind === 'buff' ? !front() || R.buff > 0 : !front()) return;
   R.cds[i] = cdOf(id) * (manual || R.hs.pw.danceCd ? 1 : BAL.autoCd);
@@ -3122,7 +3165,7 @@ function execAttack(o){
     if (o.heroSkill && e.boss && R.hs.pw.ryugoroshi) d *= 1.5;
     if (o.heroSkill && R.hs.pw.dice) d *= Math.random() < 0.5 ? 1.8 : 0.6;
     if (o.heroSkill && crit && R.hs.pw.zantetsu && !e.boss && Math.random() < 0.1) d = Math.max(d, e.hp + 1);
-    if (o.heroSkill){ d *= holyMul(e); if (e.boss && R.hs.pw.bossDmg) d *= 1 + R.hs.pw.bossDmg / 100; if (e.boss && R.hs.pw.gravity) d += e.hp * 0.03; if (o.pct) d += e.hp * o.pct; }
+    if (o.heroSkill){ d *= holyMul(e); if (e.boss && R.hs.pw.bossDmg) d *= 1 + R.hs.pw.bossDmg / 100; const pr = SP[e.sp].finalBoss ? 0.1 : 1; if (e.boss && R.hs.pw.gravity) d += Math.max(e.hp * 0.03, e.max * 0.0005) * pr; if (o.pct) d += Math.max(e.hp * o.pct, e.max * 0.05) * pr; }   // %-of-remaining hits keep a floor of max HP, so they can finish a boss off
     fxAt(e, o.fx, o.gold);
     if (hurtEnemy(e, d, {crit, heroSkill:o.heroSkill})) kills++;
     else {
@@ -3375,7 +3418,7 @@ function fuseAllies(baseId, matId){
   if (!fpw.fuseSafe && Math.random() < ACCIDENT_RATE * (S.dbg.accident ? 32 : 1) * (fpw.fuseWild ? 4 : 1)){
     const from = a.sp, fam = family(from), area = SP[from].area || 0;
     // only ever a step up: same family, rarer (or as rare) and from a deeper area / a boss or rare kind — never down to a weaker kind
-    const up = k => k !== from && !SP[k].abyssBoss && SP[k].rate >= SP[from].rate && (SP[k].rare || SP[k].boss || (SP[k].area || 0) > area);
+    const up = k => k !== from && !SP[k].abyssBoss && !SP[k].finalBoss && SP[k].rate >= SP[from].rate && (SP[k].rare || SP[k].boss || (SP[k].area || 0) > area);
     let cands = Object.keys(SP).filter(k => family(k) === fam && up(k));
     if (!cands.length) cands = Object.keys(SP).filter(k => (SP[k].rare || SP[k].boss) && up(k) && SP[k].rate >= SP[from].rate);
     if (cands.length){   // nothing above it: no accident this time
@@ -3562,7 +3605,12 @@ function drawEnemy(e){
   const lx = e.lunge > 0 ? -4 : 0;
   if (!e.dead) shadow(e.x, e.y, e.w * 0.8);
   const charging = e.boss && e.charge > 0 && Math.floor(G.t * 12) % 2 === 0;
-  drawSprAt(SP[e.sp].spr, e.x + lx, e.y, true, e.sc, (e.hitT > 0 || e.dead) && !charging, alpha);
+  const fb = SP[e.sp].finalBoss, fy = fb && !e.dead ? Math.round(Math.sin(G.t * 1.6) * 3) - 4 : 0;
+  if (fb && !e.dead){   // dark halo that pulses; deeper phases glow red
+    ctx.save(); ctx.globalAlpha = 0.18 + 0.1 * Math.sin(G.t * 3); ctx.fillStyle = (e.phase || 1) >= 3 ? '#ff2050' : (e.phase || 1) >= 2 ? '#b040c0' : '#7a5ad0';
+    ctx.beginPath(); ctx.arc(e.x, e.y + fy - e.h * 0.55, e.w * 0.62, 0, Math.PI * 2); ctx.fill(); ctx.restore();
+  }
+  drawSprAt(SP[e.sp].spr, e.x + lx, e.y + fy, true, e.sc, ((e.hitT > 0 && (!fb || Math.floor(G.t * 20) % 4 === 0)) || e.dead) && !charging, alpha);   // 消灯王 is hit nonstop: flash only now and then so it stays visible
   if (charging){ ctx.save(); ctx.globalAlpha = 0.35; ctx.fillStyle = '#ff3020'; ctx.fillRect(e.x - e.w / 2, e.y - e.h, e.w, e.h); ctx.restore(); }
   if (e.dead) return;
   if (e.stun > 0){ ctx.fillStyle = '#ffe14a'; const p = G.t * 8; ctx.fillRect(e.x + Math.cos(p) * 4, e.y - e.h - 3, 1, 1); ctx.fillRect(e.x - Math.cos(p) * 4, e.y - e.h - 3, 1, 1); }
@@ -3718,7 +3766,9 @@ function ui(now){
     $('#hudR').textContent = `ひらめき ${(sparkChance(R.floor) * 100).toFixed(1)}%`;
     const boss = R.enemies.find(e => e.boss && !e.dead);
     $('#bossbar').hidden = !boss;
-    if (boss){ $('#bossFill').style.width = (boss.hp / boss.max * 100) + '%'; $('#bossName').textContent = `${boss.name} Lv${fmtN(enemyLv(R.floor) + 3)}`; }
+    if (boss){ const r = boss.hp / boss.max;
+      $('#bossFill').style.width = Math.max(1.5, r * 100) + '%';   // a living boss always keeps a sliver of bar
+      $('#bossName').textContent = `${boss.name} Lv${fmtN(enemyLv(R.floor) + 3)}${r < 0.01 ? `　のこり ${pctStr(r)}%` : ''}`; }
     // skill cooldowns + mastery numbers
     const sb = $('#stealBtn'); sb.hidden = !R.hs.pw.steal;
     if (!sb.hidden){
