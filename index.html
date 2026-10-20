@@ -3551,7 +3551,7 @@ function newAlly(spk, f){
 const ACCIDENT_RATE = 1 / 64;
 const family = k => SP[k].base || (BOSS_DEF[k] && BOSS_DEF[k].base) || (RARE_DEF[k] && RARE_DEF[k].base) || k;
 const fuseCost = (a, m) => Math.round(8 * (a.lv + m.lv) * (1 + 0.05 * (a.plus || 0)));   // cheap: spare allies are meant to be fused
-function fuseAllies(baseId, matId){
+function fuseAllies(baseId, matId, quiet){   // quiet: bulk fusion saves once at the end instead of after every pair
   const a = allyById(baseId), m = allyById(matId);
   if (!a || !m || a === m || a.sp !== m.sp) return null;
   const cost = fuseCost(a, m); if (S.gold < cost) return null;
@@ -3580,7 +3580,7 @@ function fuseAllies(baseId, matId){
       acc = {from};
     }
   }
-  save();
+  if (!quiet) save();
   return {a, acc};
 }
 /* Bulk fusion: fold every reserve ally of a species into its best one (a party member if there is one). */
@@ -3598,26 +3598,33 @@ function bulkPlan(spk){
   return {base, mats, cost, plus};
 }
 function bulkFuse(spks){
-  const res = [];
+  // One press folds everything. An accident turns the base into another kind; the rest of that kind then
+  // gets a new base and keeps going, so a thousand spares never need a thousand presses (or a thousand saves).
+  const res = [], accs = [];
   for (const k of spks){
-    const p = bulkPlan(k); if (!p) continue;
-    const b = p.base, from = b.sp, before = b.plus || 0; let n = 0, acc = null;
-    for (const m of p.mats){
-      if (b.sp !== from) break;                 // an accident changed the species: stop this group
-      const r = fuseAllies(b.id, m.id); if (!r) break;
-      n++; if (r.acc) acc = r.acc;
+    let n = 0, before = null, guard = 0, last = null;
+    for (let p = bulkPlan(k); p && guard++ < 1000; p = bulkPlan(k)){
+      const b = p.base, from = b.sp; if (before == null) before = b.plus || 0;
+      let got = 0;
+      for (const m of p.mats){
+        if (b.sp !== from) break;
+        const r = fuseAllies(b.id, m.id, true); if (!r) break;
+        got++; if (r.acc) accs.push({a:b, acc:r.acc});
+      }
+      if (!got) break;   // out of gold
+      n += got; last = b;
+      if (b.sp === from) break;   // no accident: this kind is done
     }
-    if (n) res.push({a:b, from, before, n, acc});
+    if (n) res.push({k, n, before, a:last});
   }
   if (!res.length) return;
-  const accs = res.filter(r => r.acc);
   save();
+  const SHOW = 3;   // full accident scenes: the first few only, the rest go into the summary
   const summary = `<p style="text-align:center">まとめて 合成 けっか</p>
-    <ul>${res.map(r => `<li><span class="r2">${esc(allyName(r.a))}</span>（${SP[r.from].n}）＋${r.before} → ＋${r.a.plus}　<span class="hint">${r.n}体 吸収</span>${r.acc ? `<br><b class="r5">合体事故 → ${SP[r.a.sp].n} に なった！</b>` : ''}</li>`).join('')}</ul>
-    ${accs.length ? '<p class="hint">合体事故で 種族が かわったので、その種族の 残りの 合成は とめた。</p>' : ''}
+    <div style="max-height:58vh;overflow-y:auto"><ul>${res.map(r => `<li>${SP[r.k].n}：<span class="hint">${r.n}体 吸収</span>${r.a && r.a.sp === r.k ? `　<span class="r2">${esc(allyName(r.a))}</span> ＋${r.before} → ＋${r.a.plus}` : ''}</li>`).join('')}</ul>
+    ${accs.length ? `<p><b class="r5">合体事故 ${accs.length}回！</b><br>${accs.slice(0, 10).map(x => `${esc(allyName(x.a))}（${SP[x.acc.from].n} → ${SP[x.a.sp].n}）`).join('<br>')}${accs.length > 10 ? `<br>ほか ${accs.length - 10}件` : ''}</p>` : ''}</div>
     <div class="opts"><button class="btn primary" data-m="close">OK</button></div>`;
-  // every accident gets its own full scene first, then the summary
-  fuseQueue = [...accs.map(r => ({a:r.a, acc:r.acc})), {html:summary}];
+  fuseQueue = [...accs.slice(0, SHOW).map(x => ({a:x.a, acc:x.acc})), {html:summary}];
   if (!accs.length) se('fuse');
   nextFuseModal();
 }
