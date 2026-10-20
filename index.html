@@ -1151,7 +1151,7 @@ function freshSave(){
     mats:{iron:0, leaf:0, mithril:0, crystal:0, star:0}, craft:{m:0},
     market:{day:'', bought:{}}, dayOff:0, stall:[], stallT:0, stallLog:[], cmdKnown:{},
     fac:{bag:0, stall:0, forge:0, inn:0, party:0, clock:0}, charmNext:{}, stats2:{refines:0, broken:0},
-    seenCoach:false, seenHelp:{}, helpVer:2, abyssBoss:{}, autoDive:false, unlockSeen:0, trueClear:null, devRoom:null, newMark:{}, shards:0, combos:{}, bossMiss:{}, comboFx:true, repeatFloor:false, guard:0, autoRecruit:false, dmgNum:'all', autoSellWeak:false,
+    seenCoach:false, seenHelp:{}, helpVer:2, abyssBoss:{}, autoDive:false, unlockSeen:0, trueClear:null, devRoom:null, newMark:{}, shards:0, combos:{}, bossMiss:{}, comboFx:true, repeatFloor:false, lastActive:0, lastFloor:1, goals:{}, goalSeen:{}, backupAsked:{}, eco:false, guard:0, autoRecruit:false, dmgNum:'all', autoSellWeak:false,
     stats:{kills:0, sparks:0, recruits:0, cards:0},
   };
 }
@@ -2008,6 +2008,7 @@ function floater(x, y, v, col, sc = 1){
   G.floaters.push({x, y, v:typeof v === 'number' ? fmtNum(v) : v, col, sc, life:0.8}); if (G.floaters.length > 60) G.floaters.shift();
 }
 function burst(x, y, col, n = 6, sp = 40){
+  if (S.eco) n = Math.ceil(n / 3);
   for (let i = 0; i < n; i++) G.parts.push({x, y, vx:rnd(-sp, sp), vy:rnd(-sp, sp * 0.3), life:rnd(0.25, 0.5), col});
   if (G.parts.length > 260) G.parts.splice(0, G.parts.length - 260);
 }
@@ -2062,7 +2063,7 @@ function makeAllyActor(al, i, hs = heroStats()){
           atkT:rnd(0.2, 1), skT:rnd(1, 3), skcd:sp.sk.cd * m.cd, lunge:0, hitT:0, dead:false, spr:sp.spr, sp:al.sp, sc: sp.finalBoss ? 1.15 : sp.boss ? 1.5 : 1};
 }
 function startRun(f){
-  auInit(); track('start', 'はじめて出撃');
+  auInit(); track('start', 'はじめて出撃'); S.lastFloor = f;
   R = {floor:f, wave:0, waves:5, isBoss:false, enemies:[], actors:buildActors(), phase:'march', marchT:1.0, endT:0,
        scroll:0, cds:[0,0,0,0,0,0,0,0], buff:0, freeze:0, shake:0, paused:false, pending:null, hs:heroStats(),
        loot:{kills:0, exp:0, gold:0, items:0, rares:0, recruits:0, sparks:0, floors:0, cards:0, boxes:0}};
@@ -2442,7 +2443,8 @@ function killEnemy(e){
   // recruit roll
   const sp0 = SP[e.sp], bossRec = sp0.boss;
   // bosses: about 1/30 (abyss bosses 1/15, they are rare), and every miss makes the next one a little likelier
-  const baseDen = bossRec ? (sp0.finalBoss ? 20 : sp0.abyssBoss ? 15 : 30) / (1 + 0.15 * ((S.bossMiss || {})[e.sp] || 0)) : sp0.rate * BAL.recruitMul;
+  const firstRec = !S.stats.recruits && f >= 3 && !bossRec;   // the very first friend stands up early
+  const baseDen = firstRec ? 4 : bossRec ? (sp0.finalBoss ? 20 : sp0.abyssBoss ? 15 : 30) / (1 + 0.15 * ((S.bossMiss || {})[e.sp] || 0)) : sp0.rate * BAL.recruitMul;
   const denom = baseDen / (S.dbg.recruit ? 10 : 1) / (hs.pw.tame ? 2 : 1) / (hs.pw.charmTame ? 2 : 1) / (hs.pw.call ? 1.5 : 1);
   if (!R.paused && Math.random() < 1 / denom){ if (bossRec && S.bossMiss) delete S.bossMiss[e.sp]; openRecruit(e.sp, f); }
   else if (bossRec){ S.bossMiss = S.bossMiss || {}; S.bossMiss[e.sp] = (S.bossMiss[e.sp] || 0) + 1; }
@@ -2969,7 +2971,7 @@ function showTrueClear(){
     </div>
     <p>ここで 冒険を おえるのも、<br>天井を 見に もぐり つづけるのも、あなたの 自由。</p>
     <p style="text-align:center">ここまで 遊んでくれて、ほんとうに ありがとう。</p>
-    <div class="opts"><button class="btn primary" data-m="trueClearOk">この先へ</button></div>`);
+    <div class="opts"><button class="btn" data-m="shareX" data-k="trueClear">Xで シェア</button><button class="btn primary" data-m="trueClearOk">この先へ</button></div>`);
 }
 function showEnding(){
   se('ending');
@@ -2986,7 +2988,7 @@ function showEnding(){
       <li>抽出した力：${Object.keys(S.extracted).length}／${Object.keys(UNIQ).length}</li>
     </ul>
     <p class="hint" style="text-align:center">ここから先も 魔界は つづいている。<br>F${CLEAR_FLOOR + 1}より 深くへ どこまで いけるか ためしてみよう。</p>
-    <div class="opts"><button class="btn primary" data-m="ending">冒険を つづける</button></div>`);
+    <div class="opts"><button class="btn" data-m="shareX" data-k="clear">Xで シェア</button><button class="btn primary" data-m="ending">冒険を つづける</button></div>`);
 }
 function showPostClear(){
   showModal(`<p class="r2" style="text-align:center">― クリア後の 魔界 ―</p>
@@ -3003,6 +3005,7 @@ function showPostClear(){
 function afterClear(){
   if (S.repeatFloor || S.autoNext){
     const f = S.repeatFloor ? R.floor : R.floor + 1;   // 周回: the same floor again (boss gear farming)
+    S.lastFloor = f;
     R.floor = f; R.wave = 0; R.isBoss = false; R.enemies = []; R.phase = 'march'; R.marchT = 1;
     R.hs = heroStats();
     R.actors = buildActors();
@@ -3071,7 +3074,7 @@ function useSkill(i, manual){
   R.cds[i] = cdOf(id) * (manual || R.hs.pw.danceCd ? 1 : BAL.autoCd);
   // spark check (romasaga style: the new move replaces the one you swung)
   const kids = Object.keys(SK).filter(k => SK[k].parent === id && !S.skills[k] && S.skills[id].m >= SK[k].req);
-  if (kids.length && Math.random() < sparkChance(R.floor)){
+  if (kids.length && Math.random() < (S.stats.sparks === 0 && R.floor >= 2 ? 0.3 : sparkChance(R.floor))){   // the very first ひらめき comes early
     const nk = pick(kids);
     S.skills[nk] = {m: R.hs.pw.sekaiju ? 300 : 0}; S.stats.sparks++; R.loot.sparks++; if (Object.keys(S.skills).length >= 10) track('spark-10', '技を10個ひらめいた');
     const empty = S.slots.indexOf(null); if (empty >= 0) S.slots[empty] = nk; setNew('skill');
@@ -3278,6 +3281,7 @@ function tryCombo(src){
   for (const [c, pr] of cands){
     const known = !!(S.combos && S.combos[c.id]);
     let p = c.a === 'hero' ? (known ? 1 / 25 : 1 / 150) : (known ? 1 / 40 : 1 / 200);
+    if (!comboCount() && c.a === 'hero') p = 1 / 8;   // the first 合体技 comes early
     if (S.dbg.spark) p *= 10;
     if (Math.random() < p){ startCombo(c, pr[0], pr[1]); return true; }
   }
@@ -3361,6 +3365,148 @@ function panelCombos(){
     h += `</div>`;
   }
   return h;
+}
+
+/* ---------- 留守のあいだの成果 (offline progress): the party keeps fighting while the game is closed ---------- */
+const OFFLINE_MAX_H = 8, OFFLINE_KPH = 1200;   // kills per hour while away: kept well below a real run at x1
+const offlineFloor = () => clamp(S.lastFloor || S.selFloor || 1, 1, Math.max(1, S.maxFloor || 0));
+function whenFree(fn){ const t = setInterval(() => { if ($('#modal').hidden && !DEV.on){ clearInterval(t); fn(); } }, 600); }
+function grantOffline(ms){
+  if (ms < 60000 || (S.maxFloor || 0) < 1) return null;
+  const h = Math.min(OFFLINE_MAX_H, ms / 3600000), f = offlineFloor(), hs = heroStats();
+  const kills = Math.floor(h * OFFLINE_KPH); if (kills < 1) return null;
+  const exp = Math.min(NUM_CAP, kills * 5 * gExp(f) * (1 + hs.exp / 100));
+  const gold = Math.min(NUM_CAP, Math.round(kills * 2 * gGold(f) * (1 + hs.gold / 100)));
+  const mk = AREA_MAT[areaOfF(f)], mats = Math.floor(kills * 0.12), boxes = Math.floor(kills * 0.004);
+  S.gold = Math.min(NUM_CAP, S.gold + gold); S.mats[mk] = (S.mats[mk] || 0) + mats; S.boxes += boxes;
+  const lv0 = S.hero.lv; S.hero.exp = Math.min(NUM_CAP, S.hero.exp + exp);
+  const lu = levelFrom(S.hero.lv, S.hero.exp, 1, NUM_CAP); S.hero.lv = lu.lv; S.hero.exp = lu.exp;
+  for (const id of S.party){   // the party members grow too
+    const al = id && allyById(id); if (!al) continue; const cap = allyCap(al); if (al.lv >= cap) continue;
+    al.exp = Math.min(NUM_CAP, al.exp + exp); const l2 = levelFrom(al.lv, al.exp, 0.8, cap); al.lv = l2.lv; al.exp = l2.exp;
+    if (al.lv >= cap){ al.capped = true; al.exp = 0; }
+  }
+  return {h, f, kills, exp, gold, mk, mats, boxes, lvUp: S.hero.lv - lv0};
+}
+function showOffline(r){
+  const hh = Math.floor(r.h), mm = Math.round((r.h - hh) * 60);
+  se('clear');
+  showModal(`<p class="r2" style="text-align:center;font-size:18px">おかえりなさい！</p>
+    <p style="text-align:center">${hh ? hh + '時間' : ''}${mm}分の あいだ、なかまたちが F${fmtN(r.f)} あたりで がんばっていた。</p>
+    <ul><li>たおした まもの：${fmtN(r.kills)}体</li>
+      <li>けいけんち：${fmtN(r.exp)}${r.lvUp > 0 ? `（ゆうしゃ Lv +${fmtN(r.lvUp)}）` : ''}</li>
+      <li>ゴールド：${fmtN(r.gold)}</li><li>${MATS[r.mk].n}：${fmtN(r.mats)}こ</li>${r.boxes ? `<li>青箱：${r.boxes}こ</li>` : ''}</ul>
+    <p class="hint" style="text-align:center">ゲームを とじている あいだも、最大 ${OFFLINE_MAX_H}時間ぶん 成果が たまる。</p>
+    <div class="opts"><button class="btn primary" data-m="close">うけとる</button></div>`);
+  renderParty(); renderTop(); if (mode === 'camp') renderCamp();
+}
+function checkOffline(){
+  const now = Date.now(), last = S.lastActive || 0; S.lastActive = now;
+  if (!last) return;
+  const r = grantOffline(now - last);
+  if (r){ save(); whenFree(() => showOffline(r)); }
+}
+
+/* ---------- 目標 (goals): a short list of what to do next, with a small reward each ---------- */
+const comboCount = () => Object.keys(S.combos || {}).length;
+const cmdCount = () => Object.keys(S.cmdKnown || {}).length;
+const gearRef = n => [...Object.values(S.equip), ...S.inv].some(it => it && (it.ref || 0) >= n);
+const jobAny = n => Object.keys(JOBS).some(k => jobLv(k) >= n);
+const fGoal = n => [`f${n}`, `F${n} を とっぱする${n === CLEAR_FLOOR ? '（ゲームクリア）' : ''}`, () => (S.maxFloor || 0) >= n];
+const GOALS = [
+  ['party', '仲間を パーティに 入れる', () => S.party.some(Boolean)],
+  ['spark1', '技を 1つ ひらめく', () => S.stats.sparks >= 1],
+  fGoal(10),
+  ['slots3', '技を 3つ セットする', () => S.slots.filter(Boolean).length >= 3],
+  ['combo1', '合体技を 1つ 見つける', () => comboCount() >= 1],
+  ['ref3', '装備を +3 まで 精錬する（町の 精錬所）', () => gearRef(3)],
+  ['job5', 'ジョブを Lv5 に する', () => jobAny(5)],
+  fGoal(30),
+  ['ally10', '仲間を 10体 あつめる', () => S.stats.recruits >= 10, () => `${Math.min(10, S.stats.recruits)}/10`],
+  ['cmd1', 'かくし技を 1つ 見つける（技タブに 手がかり）', () => cmdCount() >= 1],
+  fGoal(CLEAR_FLOOR),
+  ['master', 'ジョブを 1つ マスターする', () => jobAny(JOB_MAX)],
+  ['combo10', '合体技を 10 見つける', () => comboCount() >= 10, () => `${Math.min(10, comboCount())}/10`],
+  fGoal(100),
+  ['bossAlly', 'ボスを 仲間にする', () => S.allies.some(a => SP[a.sp] && SP[a.sp].boss)],
+  ['cmd5', 'かくし技を 5つ 見つける', () => cmdCount() >= 5, () => `${Math.min(5, cmdCount())}/5`],
+  ['ref7', '装備を +7 まで 精錬する', () => gearRef(7)],
+  fGoal(300),
+  ['combo30', '合体技を 30 見つける', () => comboCount() >= 30, () => `${Math.min(30, comboCount())}/30`],
+  fGoal(500), fGoal(1000),
+  ['abyssKill', '深淵の 奥に ひそむ ボスを たおす', () => Object.keys(S.abyssBoss || {}).length >= 1],
+  fGoal(2000),
+  ['abyssAlly', '深淵の ボスを 仲間にする', () => S.allies.some(a => SP[a.sp] && SP[a.sp].abyssBoss)],
+  ['combo50', '合体技を 50 見つける', () => comboCount() >= 50, () => `${Math.min(50, comboCount())}/50`],
+  fGoal(3000), fGoal(5000), fGoal(TRUE_CLEAR_FLOOR),
+  ['finalAlly', () => S.trueClear ? `F${TRUE_CLEAR_FLOOR}の 主を 仲間にする` : '？？？を 仲間にする', () => S.allies.some(a => SP[a.sp] && SP[a.sp].finalBoss)],
+  ['comboAll', '合体技を すべて 見つける', () => comboCount() >= COMBOS.length, () => `${comboCount()}/${COMBOS.length}`],
+];
+const goalText = g => typeof g[1] === 'function' ? g[1]() : g[1];
+function goalReward(i){ return {gold: Math.round(30 * gGold(Math.max(1, S.maxFloor || 0)) * (1 + i / 4)), boxes: 1 + Math.floor(i / 8)}; }
+function goalsShown(){ S.goals = S.goals || {}; return GOALS.map((g, i) => ({g, i})).filter(o => !S.goals[o.g[0]]).slice(0, 3); }
+function panelGoals(){
+  const list = goalsShown(), done = GOALS.filter(g => S.goals[g[0]]).length;
+  if (!list.length) return `<h3>目標</h3><p class="hint">すべての 目標を たっせいした！</p><div class="row"><button class="btn sm" data-act="goalList">目標の 一覧を 見る</button></div>`;
+  return `<h3>目標（${done}／${GOALS.length}）</h3><div class="row" style="margin:-4px 0 6px"><button class="btn sm" data-act="goalList">目標の 一覧を 見る</button></div><div class="list">` + list.map(({g, i}) => {
+    const ok = g[2](), rw = goalReward(i), prog = g[3] ? `<span class="num">${g[3]()}</span>` : '';
+    return `<div class="li ${ok ? '' : 'locked'}" style="cursor:default;align-items:center"><div class="body"><div class="t"><span>${ok ? '<span class="r2">★</span> ' : ''}${goalText(g)}</span>${prog}</div>
+      <div class="d">ほうび：${fmtN(rw.gold)}G ＋ 青箱 ${rw.boxes}こ</div></div>${ok ? `<button class="btn sm primary" data-act="goalGet" data-k="${g[0]}">うけとる</button>` : ''}</div>`;
+  }).join('') + `</div>`;
+}
+function showGoalList(){   // every goal: received / ready / not yet (spoiler-prone ones keep their veiled names)
+  S.goals = S.goals || {};
+  const done = GOALS.filter(g => S.goals[g[0]]).length;
+  const rows = GOALS.map((g, i) => {
+    const got = S.goals[g[0]], ok = !got && g[2](), rw = goalReward(i), prog = !got && g[3] ? `　${g[3]()}` : '';
+    const mark = got ? '<span style="color:var(--hpl)">✓</span>' : ok ? '<span class="r2">★</span>' : '<span style="color:var(--dim)">・</span>';
+    return `<div style="display:flex;align-items:center;gap:6px;padding:5px 0;border-bottom:1px solid #2a2e4a">
+      <span style="flex:none;width:1.2em;text-align:center">${mark}</span>
+      <span style="flex:1;${got ? 'color:var(--dim)' : ''}">${goalText(g)}<span class="hint">${prog}</span><br><span class="hint">ほうび：${fmtN(rw.gold)}G ＋ 青箱 ${rw.boxes}こ</span></span>
+      ${ok ? `<button class="btn sm primary" data-m="goalGetM" data-k="${g[0]}">うけとる</button>` : ''}</div>`;
+  }).join('');
+  showModal(`<p class="r2" style="text-align:center">目標の 一覧（${done}／${GOALS.length}）</p>
+    <p class="hint" style="text-align:center">✓ うけとりずみ ／ ★ たっせい ／ ・ まだ</p>
+    <div style="max-height:55vh;overflow-y:auto;font-size:13px">${rows}</div>
+    <div class="opts"><button class="btn primary" data-m="close">とじる</button></div>`);
+}
+function claimGoal(k){
+  const i = GOALS.findIndex(g => g[0] === k); if (i < 0 || S.goals[k] || !GOALS[i][2]()) return;
+  const rw = goalReward(i); S.goals[k] = true;
+  S.gold = Math.min(NUM_CAP, S.gold + rw.gold); S.boxes += rw.boxes;
+  se('clear'); toast(`目標 たっせい！ ${fmtN(rw.gold)}G と 青箱 ${rw.boxes}こ を てにいれた`);
+  save(); renderTop(); renderCamp();
+}
+function goalTick(){   // a new goal reached: one toast, and the 出撃 tab gets its NEW badge
+  S.goalSeen = S.goalSeen || {};
+  for (const {g} of goalsShown()) if (!S.goalSeen[g[0]] && g[2]()){ S.goalSeen[g[0]] = true; setNew('go'); toast(`<span class="r2">★</span> 目標 たっせい！「${goalText(g)}」 出撃タブで うけとれる`); break; }
+}
+
+/* ---------- セーブの おまもり: at big milestones, suggest backing the save up once ---------- */
+const BACKUP_AT = [CLEAR_FLOOR, 500, 1000, 3000, TRUE_CLEAR_FLOOR];
+function backupTick(){
+  if (mode !== 'camp' || !$('#modal').hidden || DEV.on) return;
+  S.backupAsked = S.backupAsked || {};
+  const at = BACKUP_AT.filter(n => (S.maxFloor || 0) >= n && !S.backupAsked[n]).pop(); if (!at) return;
+  for (const n of BACKUP_AT) if (n <= at) S.backupAsked[n] = true;
+  save();
+  showModal(`<p class="r2" style="text-align:center">セーブを まもろう</p>
+    <p>F${at} まで きた ぼうけんの 記録は、この ブラウザの 中だけに ある。ブラウザの データを 消したり、別の 端末で 遊んだりすると 続きから 遊べない。</p>
+    <p>「セーブの 書き出し」で 文字列や ファイルに して とっておくと 安心。（設定タブで いつでも できる）</p>
+    <div class="opts"><button class="btn" data-m="close">あとで</button><button class="btn primary" data-m="backupNow">書き出す</button></div>`);
+}
+
+/* ---------- 記録を X で シェア ---------- */
+const SHARE_URL = 'https://plicy.net/GamePlay/238840';
+function shareText(kind){
+  const t = abyssTitle(abyssLv()), base = `ゆうしゃ Lv${fmtN(S.hero.lv)}${t ? `・称号「${t}」` : ''}`;
+  if (kind === 'trueClear') return `ピコーン・クエストを 完全制覇した！（F${TRUE_CLEAR_FLOOR} とっぱ／${base}）`;
+  if (kind === 'clear') return `ピコーン・クエストを クリアした！（F${CLEAR_FLOOR} とっぱ／${base}）`;
+  return `ピコーン・クエストで F${fmtN(S.maxFloor || 0)} まで とうたつ！（${base}／合体技 ${comboCount()}/${COMBOS.length}）`;
+}
+function shareX(kind){
+  const u = 'https://twitter.com/intent/tweet?text=' + encodeURIComponent(shareText(kind)) + '&url=' + encodeURIComponent(SHARE_URL) + '&hashtags=' + encodeURIComponent('ピコーンクエスト');
+  try { window.open(u, '_blank', 'noopener'); } catch(e){}
 }
 
 /* ---------- recruit ---------- */
@@ -3910,6 +4056,8 @@ function panelGo(){
     <div class="row">${[['next', '次の階へ すすむ'], ['repeat', '同じ階を 周回'], ['camp', '拠点へ もどる']].map(([k, n]) => `<button class="btn sm ${clearMode() === k ? 'primary' : ''}" data-act="clearMode" data-k="${k}">${n}</button>`).join('')}</div>
     ${S.repeatFloor ? '<p class="hint">同じ階を くりかえし 戦う（ボスの 装備あつめに）。撤退ボタンで 止まる。</p>' : ''}
     ${unlocked('autoDive') ? `<label class="toggle"><span>全滅したら 10階 手前から 自動で 出撃しなおす（自動 深層ぬけ）</span><input type="checkbox" data-act="autoDive" ${S.autoDive ? 'checked' : ''}></label>` : ''}
+    ${panelGoals()}
+    ${(S.maxFloor || 0) >= 1 ? `<div class="row" style="margin-top:8px"><button class="btn sm" data-act="shareX" data-k="floor">記録を Xで シェア</button></div>` : ''}
     <div class="row" style="align-items:center;gap:10px"><button class="btn sm" data-act="manualSave">いま セーブする</button><span class="hint">最後の セーブ：${lastSaveText()}</span></div>
     ${abyssPanel()}
     <h3>ゆうしゃ のつよさ（${JOBS[S.job].n} Lv${jobLv(S.job)}）</h3>
@@ -4389,6 +4537,7 @@ function panelCfg(){
   return `<h3>あそびかた</h3>
     <label class="toggle"><span>仲間が おきあがったら すぐ「はい」（3秒 待たない）</span><input type="checkbox" data-act="autoRec" ${S.autoRecruit ? 'checked' : ''}></label>
     <label class="toggle"><span>合体技の 演出を 見せる（オフにすると 止まらずに すぐ 発動）</span><input type="checkbox" data-act="comboFx" ${S.comboFx !== false ? 'checked' : ''}></label>
+    <label class="toggle"><span>省電力モード（画面の 動きと エフェクトを へらして 電池と 発熱を おさえる）</span><input type="checkbox" data-act="eco" ${S.eco ? 'checked' : ''}></label>
     <label class="toggle"><span>拾った 弱い装備を 自動で 売る</span><input type="checkbox" data-act="autoSell" ${S.autoSellWeak ? 'checked' : ''}></label>
     <p class="hint" style="margin:0">ダメージの 数字（重いと 感じたら 減らしてね）</p>
     <div class="row">${[['all', 'すべて'], ['crit', '会心だけ'], ['off', '出さない']].map(([k, n]) => `<button class="btn sm ${(S.dmgNum || 'all') === k ? 'primary' : ''}" data-act="dmgNum" data-k="${k}">${n}</button>`).join('')}</div>
@@ -4569,6 +4718,9 @@ $('#modal').addEventListener('click', e => {
   if (m === 'fu-pick'){ confirmFuse(+b.dataset.id); return; }
   if (m === 'fu-do'){ const r = fuseAllies(fusePick.base, fusePick.mat); if (r) showFuseResult(r); else hideModal(); renderCamp(); renderParty(); return; }
   if (m === 'ending'){ showPostClear(); return; }
+  if (m === 'goalGetM'){ claimGoal(b.dataset.k); showGoalList(); return; }
+  if (m === 'backupNow'){ hideModal(); openSaveOut(); return; }
+  if (m === 'shareX'){ shareX(b.dataset.k); return; }
   if (m && m.startsWith('dev')){ devStep(m); return; }
   if (m === 'trueClearOk'){ save(); hideModal(); renderTop(); renderCamp();
     if (abyssLv() > (S.abyssSeen || 0) || pendingUnlocks().length){ showAbyss(); return; }
@@ -4711,6 +4863,9 @@ $('#panel').addEventListener('click', e => {
     case 'saveIn': openSaveIn(); return;
     case 'helpReset': S.seenHelp = {}; save(); toast('各画面を ひらくと 説明が もう一度 出る'); break;
     case 'town': TOWN = b.dataset.k; se('ui'); break;
+    case 'goalGet': claimGoal(b.dataset.k); return;
+    case 'goalList': showGoalList(); return;
+    case 'shareX': shareX(b.dataset.k); return;
     case 'clearMode': setClearMode(b.dataset.k); updNextBtn(); se('ui'); save(); break;
     case 'allyP': ALLYP = b.dataset.k; selAlly = null; se('ui'); $('#panel').scrollTop = 0; break;
     case 'facUp': {
@@ -4815,6 +4970,7 @@ $('#panel').addEventListener('change', e => {
   if (act === 'flIn'){ const v = Math.floor(+t.value); S.selFloor = clamp(isFinite(v) && v > 0 ? v : 1, 1, S.maxFloor + 1); renderCamp(); }
   if (act === 'autoRec') S.autoRecruit = t.checked;
   if (act === 'comboFx'){ S.comboFx = t.checked; save(); }
+  if (act === 'eco'){ S.eco = t.checked; save(); }
   if (act === 'autoSell'){ S.autoSellWeak = t.checked; save(); renderCamp(); }
   if (act === 'star'){ craftStar = t.checked; renderCamp(); }
   if (act === 'snd'){ S.snd.on = t.checked; auInit(); auVol(); }
@@ -4839,11 +4995,12 @@ function coach(){
 
 /* ---------- loop ---------- */
 let last = performance.now();
+let ecoTick = 0;
 function frame(now){
   const dt = Math.min(0.05, (now - last) / 1000); last = now;
   if (DEV.on) updFx(dt);   // the 開発室 runs in real time whatever the battle speed
   else for (let i = 0; i < (mode === 'battle' ? S.speed : 1); i++) update(dt);
-  draw(); ui(now);
+  if (!S.eco || (++ecoTick % 3) === 0 || DEV.on){ draw(); ui(now); }   // 省電力: draw one frame in three
   requestAnimationFrame(frame);
 }
 let saveIv = null;
@@ -4857,6 +5014,9 @@ function start(data){
   { let tries = 0; const t = setInterval(() => { if ((abyssLv() <= (S.abyssSeen || 0) && !pendingUnlocks().length) || ++tries > 30){ clearInterval(t); return; } if ($('#modal').hidden && mode === 'camp' && !DEV.on && DEV.glitch < devNow() && (S.devRoom || (S.maxFloor || 0) < DEV_FLOOR)){ clearInterval(t); showAbyss(); } }, 1500); }
   log('ようこそ。じゅんびが できたら しゅつげき しよう。');
   clearInterval(saveIv); saveIv = setInterval(save, 5000);
+  checkOffline();
+  setInterval(() => { if (!document.hidden) S.lastActive = Date.now(); goalTick(); backupTick(); }, 5000);
+  document.addEventListener('visibilitychange', () => { if (document.hidden){ S.lastActive = Date.now(); save(); } else checkOffline(); });
   setTimeout(() => stallNotice(stallTick(), true), 400);
   setTimeout(() => { if ($('#modal').hidden) jobUnlockNotice(); else checkJobUnlocks(); }, 600);
   setInterval(() => { stallNotice(stallTick(), false); if (mode === 'camp' && TAB === 'town') renderCamp(); }, 60000);
