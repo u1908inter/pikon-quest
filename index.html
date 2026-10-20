@@ -578,7 +578,7 @@ const abyssBossFor = f => { if (f < 1000 || f % 100) return null;
   const ks = Object.keys(ABYSS_BOSS_DEF).filter(k => f >= ABYSS_BOSS_DEF[k].f); return ks.length ? ks[(f / 100) % ks.length] : null; };
 /* F10000 最後のボス「消灯王 無明電球」: a giant dark light bulb that eats ひらめき */
 SPR.mumyo = {pal:{k:'#0e0a14', G:'#2c2440', D:'#1a1428', g:'#5a4a88', w:'#c8c0e8', R:'#ff3050', r:'#ff9aa8', M:'#6a6878', m:'#44424e', Y:'#e8c040'}, rows:[".........Y..YY..Y.........", ".........YY.YY.YY.........", ".........YYYYYYYY.........", ".........YYRYYRYY.........", "........kkkkkkkkk.........", "......kkGGGGGGGGGkk.......", ".....kGGGGGGGGGGGGGk......", "....kGGGwgGGGGGGGGGGk.....", "...kGGGwgGGGGGGGGGGGGk....", "..kGGGwgGGGGGGGGGGGGGGk...", "..kGGGwGGDDDDDDDGGGGGGk...", ".kGGGwwGDDDDDDDDDGGGGGGk..", ".kGGGwGDDDDDDDDDDDGGGGGk..", ".kGGGGGDDrDDDDDDrDGGGGGk..", ".kGGGGGDRRDDDDDDRRGGGGGk..", "kGGGGGGDDRRDDDDRRDGGGGGGk.", ".kGGGGGDDDDDDDDDDDGGGGGk..", ".kGGGGGDDDDDDDDDDDGGGGGk..", ".kGGGGGDDDDDDDDDDDGGGGGk..", "..kGGGGGRDRDRDRDRGGGGGk...", "..kGGGGGGRDRDRDRGRGGGGk...", "...kGGGGGGGGGGGGGGGGGk....", "...kGGGGGGGGGGGGGGGGGk....", "....kGGGGGGGGGGGGGGGk.....", ".....kGGGGGGGGGGGGGk......", ".....kGmmmmmmmmmmmmk......", "......kMMMMMMMMMMMMk......", "......kmmmmmmmmmmmmk......", "......kMMMMMMMMMMMMk......", "......kmmmmmmmmmmmmk......", "......kMMMMMMMMMMMMk......", "......kmmmmmmmmmmmmk......", ".......kkmmmmmmmmkk.......", ".........kkkkkkkk.........", "..........kkkkkk.........."]};
-SP.mumyo = {n:'消灯王 無明電球', spr:'mumyo', hp:40, atk:3.2, spd:8, int:1.4, exp:30, rate:1e9, role:'範囲', boss:true, finalBoss:true, area:9, names:['ムミョウ'],
+SP.mumyo = {n:'消灯王 無明電球', spr:'mumyo', hp:40, atk:3.2, spd:8, int:1.4, exp:30, rate:1e9, role:'範囲', boss:true, finalBoss:true, area:9, names:['ムミョウ', 'ヤミノ', 'トモシビ'], allyHp:6,
             sk:{n:'消灯', cd:6, kind:'all', mul:2.5, fx:'wave'}, atkName:'消灯の いかずち', big:true};
 const RARE_CHANCE = 0.04;   // per normal wave
 
@@ -1151,7 +1151,7 @@ function freshSave(){
     mats:{iron:0, leaf:0, mithril:0, crystal:0, star:0}, craft:{m:0},
     market:{day:'', bought:{}}, dayOff:0, stall:[], stallT:0, stallLog:[], cmdKnown:{},
     fac:{bag:0, stall:0, forge:0, inn:0, party:0, clock:0}, charmNext:{}, stats2:{refines:0, broken:0},
-    seenCoach:false, seenHelp:{}, helpVer:2, abyssBoss:{}, autoDive:false, unlockSeen:0, trueClear:null, devRoom:null, newMark:{}, shards:0, combos:{}, bossMiss:{}, comboFx:true, guard:0, autoRecruit:false, dmgNum:'all', autoSellWeak:false,
+    seenCoach:false, seenHelp:{}, helpVer:2, abyssBoss:{}, autoDive:false, unlockSeen:0, trueClear:null, devRoom:null, newMark:{}, shards:0, combos:{}, bossMiss:{}, comboFx:true, repeatFloor:false, guard:0, autoRecruit:false, dmgNum:'all', autoSellWeak:false,
     stats:{kills:0, sparks:0, recruits:0, cards:0},
   };
 }
@@ -1358,10 +1358,10 @@ const ALLY_HP_K = 3, ALLY_ATK_K = 0.22;
 const allyRefFloor = () => R ? R.floor : Math.max(1, (S.maxFloor || 0) + 1);   // in town: judge by the deepest floor reached, so the numbers don't jump with the sortie selector
 function allyStats(al, fRef = allyRefFloor()){
   const sp = SP[al.sp], L = al.lv, pm = 1 + PLUS_STEP * (al.plus || 0), am = sp.allyMul || 1;
-  const hp0 = 45 * Math.max(sp.hp, 1) * am * (1 + 0.2 * (L-1)) * al.g.hp * pm;
+  const hp0 = 45 * Math.max(sp.allyHp || sp.hp, 1) * am * (1 + 0.2 * (L-1)) * al.g.hp * pm;
   const atk0 = 7 * sp.atk * am * (1 + 0.24 * (L-1)) * al.g.atk * pm;
   const lf = clamp(L / 3, 1, Math.max(1, fRef));
-  const hp1 = ALLY_HP_K * 6 * gAtk(lf) * sp.hp * am * al.g.hp * pm;
+  const hp1 = ALLY_HP_K * 6 * gAtk(lf) * (sp.allyHp || sp.hp) * am * al.g.hp * pm;
   const atk1 = ALLY_ATK_K * 12 * gHP(lf) * sp.atk * am * al.g.atk * pm;
   return {
     hp: Math.round(Math.min(NUM_CAP / 1e6, Math.max(hp0, hp1))),
@@ -2059,7 +2059,7 @@ function makeAllyActor(al, i, hs = heroStats()){
   const st = allyStats(al), sp = SP[al.sp], m = allyMods(hs);
   const hp = Math.round(st.hp * m.hp);
   return {kind:'ally', id:al.id, slot:i, name:allyName(al), x:ALLY_POS[i].x, y:ALLY_POS[i].y, hp, max:hp, atk:Math.round(st.atk * m.atk), def:Math.round(st.def * (m.def || 1)), int:st.int,
-          atkT:rnd(0.2, 1), skT:rnd(1, 3), skcd:sp.sk.cd * m.cd, lunge:0, hitT:0, dead:false, spr:sp.spr, sp:al.sp, sc: sp.boss ? 1.5 : 1};
+          atkT:rnd(0.2, 1), skT:rnd(1, 3), skcd:sp.sk.cd * m.cd, lunge:0, hitT:0, dead:false, spr:sp.spr, sp:al.sp, sc: sp.finalBoss ? 1.15 : sp.boss ? 1.5 : 1};
 }
 function startRun(f){
   auInit(); track('start', 'はじめて出撃');
@@ -2441,9 +2441,8 @@ function killEnemy(e){
   if (e.boss || (!e.rare && Math.random() < 0.004 * (hs.pw.boxx2 ? 2 : 1))){ S.boxes++; R.loot.boxes++; log('<span class="r1">青箱</span> を てにいれた'); burst(e.x, e.y - 6, '#4a8cff', 8, 25); }
   // recruit roll
   const sp0 = SP[e.sp], bossRec = sp0.boss;
-  if (sp0.finalBoss) return;   // 消灯王 never joins
   // bosses: about 1/30 (abyss bosses 1/15, they are rare), and every miss makes the next one a little likelier
-  const baseDen = bossRec ? (sp0.abyssBoss ? 15 : 30) / (1 + 0.15 * ((S.bossMiss || {})[e.sp] || 0)) : sp0.rate * BAL.recruitMul;
+  const baseDen = bossRec ? (sp0.finalBoss ? 20 : sp0.abyssBoss ? 15 : 30) / (1 + 0.15 * ((S.bossMiss || {})[e.sp] || 0)) : sp0.rate * BAL.recruitMul;
   const denom = baseDen / (S.dbg.recruit ? 10 : 1) / (hs.pw.tame ? 2 : 1) / (hs.pw.charmTame ? 2 : 1) / (hs.pw.call ? 1.5 : 1);
   if (!R.paused && Math.random() < 1 / denom){ if (bossRec && S.bossMiss) delete S.bossMiss[e.sp]; openRecruit(e.sp, f); }
   else if (bossRec){ S.bossMiss = S.bossMiss || {}; S.bossMiss[e.sp] = (S.bossMiss[e.sp] || 0) + 1; }
@@ -3002,13 +3001,13 @@ function showPostClear(){
     <div class="opts"><button class="btn primary" data-m="postclear">いざ、深みへ</button></div>`);
 }
 function afterClear(){
-  if (S.autoNext){
-    const f = R.floor + 1;
+  if (S.repeatFloor || S.autoNext){
+    const f = S.repeatFloor ? R.floor : R.floor + 1;   // 周回: the same floor again (boss gear farming)
     R.floor = f; R.wave = 0; R.isBoss = false; R.enemies = []; R.phase = 'march'; R.marchT = 1;
     R.hs = heroStats();
     R.actors = buildActors();
     S.selFloor = Math.min(f, S.maxFloor + 1);
-    log(`F${f}「${themeOf(f).n}」へ すすむ`);
+    log(S.repeatFloor ? `F${f}「${themeOf(f).n}」を もう一度 周回する` : `F${f}「${themeOf(f).n}」へ すすむ`);
     playSong(fieldSong(f)); renderParty();
   } else endRun('clear');
 }
@@ -3216,10 +3215,10 @@ function allySkill(a){
 
 /* ---------- 合体技 (combo moves): the hero + an ally, or two allies, sometimes "spark" a move together ---------- */
 const COMBO_FAM = ['slime', 'bat', 'goblin', 'wolf', 'mush', 'skel', 'golem', 'dragon'];
-const COMBO_BOSS = ['kslime', 'kmush', 'kgolem', 'vslime', 'vgolem', 'vdragon'];
-const COMBO_EL = {slime:'heal', bat:'multi', goblin:'gold', wolf:'haste', mush:'sleep', skel:'crit', golem:'guard', dragon:'burn'};
+const COMBO_BOSS = ['kslime', 'kmush', 'kgolem', 'vslime', 'vgolem', 'vdragon', 'mumyo'];
+const COMBO_EL = {slime:'heal', bat:'multi', goblin:'gold', wolf:'haste', mush:'sleep', skel:'crit', golem:'guard', dragon:'burn', mumyo:'dark', vslime:'heal', vgolem:'guard', vdragon:'burn'};
 const COMBO_EL_D = {heal:'味方全員を 回復', multi:'ランダムに 連続攻撃', gold:'ゴールドを 入手', haste:'技の 再使用を 短縮', sleep:'敵を ねむらせる',
-  crit:'かならず 会心', guard:'しばらく 受けるダメージ 半減', burn:'敵を 燃やす', power:'威力 特大'};
+  crit:'かならず 会心', guard:'しばらく 受けるダメージ 半減', burn:'敵を 燃やす', power:'威力 特大', dark:'敵の 動きを 3秒 封じる'};
 /* [a, b, name]: a = 'hero' / family / boss key */
 const COMBO_LIST = [
   ['hero','slime','ぷるぷるトランポリン'], ['hero','bat','よぞらの はばたき斬り'], ['hero','goblin','ドタバタ ちゃんばら'], ['hero','wolf','疾風ライド'],
@@ -3238,6 +3237,7 @@ const COMBO_LIST = [
   ['golem','golem','ダブル いわなだれ'], ['golem','dragon','マグマ ゴーレム'], ['dragon','dragon','ツイン ブレス'],
   ['kslime','slime','おうさまと けらい'], ['kmush','mush','キノコの おうこく'], ['kgolem','golem','クリスタル とりで'],
   ['vslime','slime','こんとんの しずく'], ['vgolem','golem','ほしの いしがき'], ['vdragon','dragon','しんえんの 二重咆哮'],
+  ['hero','mumyo','再点灯'], ['mumyo','dragon','くろい ほのお'], ['mumyo','golem','やみの とりで'], ['mumyo','vslime','無明と 混沌'],
 ];
 const comboFam = k => SP[k] && (SP[k].base || (BOSS_DEF[k] && BOSS_DEF[k].base) || (RARE_DEF[k] && RARE_DEF[k].base) || (ABYSS_BOSS_DEF[k] && ABYSS_BOSS_DEF[k].base)) || k;
 const comboIsBoss = k => COMBO_BOSS.includes(k);
@@ -3252,7 +3252,8 @@ function comboDesc(c){
   const els = c.els.filter(e => e !== 'multi' || true);
   const head = els.includes('multi') ? 'ランダムに 連続攻撃' : '敵全体に 大ダメージ';
   const rest = [...new Set(els.filter(e => e !== 'multi'))].map(e => COMBO_EL_D[e]);
-  return [head, ...rest].join('、') + (new Set(els).size < els.length ? '（同じ ちからが 重なって 強力）' : '');
+  const core = els.filter(e => e !== 'power');
+  return [head, ...rest].join('、') + (new Set(core).size < core.length ? '（同じ ちからが 重なって 強力）' : '');
 }
 function comboPartners(c, src, allies){
   if (c.a === 'hero'){
@@ -3322,6 +3323,7 @@ function comboEffect(c){
   if (n('gold')){ const g = Math.round(Math.min(1e290, 30 * gGold(R.floor) * n('gold'))); S.gold = Math.min(NUM_CAP, S.gold + g); R.loot.gold += g; log(`${fmtN(g)} ゴールドを てにいれた！`); }
   if (n('haste')){ for (let i = 0; i < R.cds.length; i++) R.cds[i] = Math.max(0, R.cds[i] - 2.5 * n('haste')); for (const a of R.actors) if (a.kind === 'ally') a.skT = Math.max(0, (a.skT || 0) - 2.5 * n('haste')); }
   if (n('guard')) R.comboGuard = 6 * n('guard');
+  if (n('dark')) for (const e of liveEnemies()) e.stun = Math.max(e.stun, 3 * n('dark'));   // 消灯王: the lights go out on the enemy side
 }
 function drawComboFx(f){   // cut-in band along the bottom (the banner sits in the middle of the screen)
   const t = 1 - f.life / f.max, a = Math.min(1, f.life / 0.3), sc = f.first ? 3 : 2;
@@ -3375,8 +3377,9 @@ function openRecruit(spk, f){
     <div class="opts"><button class="btn" data-m="rec-no">いいえ</button><button class="btn primary" data-m="rec-yes" data-sp="${spk}" data-f="${f}">はい（3）</button></div>
     <div class="rec-timer"><b id="recBar"></b></div>`);
   const c = $('#recCv'), x = c.getContext('2d'), s = getSpr(sp.spr);
+  const cs = Math.max(24, s.width + 2, s.height + 3); c.width = c.height = cs;   // the giant last boss needs a bigger frame
   x.imageSmoothingEnabled = false;
-  x.drawImage(s, Math.floor((24 - s.width) / 2), 24 - s.height - 2);
+  x.drawImage(s, Math.floor((cs - s.width) / 2), cs - s.height - 2);
   // no input for 3 seconds (real time) -> answer はい
   clearInterval(recTimer);
   const btn = $('#mbox [data-m="rec-yes"]'), t0 = performance.now(), LIMIT = 3000;
@@ -3903,7 +3906,9 @@ function panelGo(){
     <p class="hint" style="text-align:center">この階層の ひらめき率 <span style="color:var(--spark)">${(ch * 100).toFixed(1)}%</span>（格上の敵ほど ひらめきやすい）<br>到達: F${S.maxFloor}　5ウェーブ ＋ ボス で 1階層</p>
     ${S.trueClear ? `<p class="r2" style="text-align:center"><span class="rainbow">★</span> 完全制覇 ― F${TRUE_CLEAR_FLOOR + 1}より先も 深淵は つづく</p>` : S.cleared ? `<p class="r2" style="text-align:center">★ ゲームクリア済み ― F${CLEAR_FLOOR + 1}より先は やりこみの 深淵</p>` : `<p class="hint" style="text-align:center">目標：F${CLEAR_FLOOR} を とっぱすると ゲームクリア</p>`}
     <button class="btn primary" data-act="go">しゅつげき する</button>
-    <label class="toggle"><span>クリア後 次の階層へ 自動で進む</span><input type="checkbox" id="optNext" data-act="next" ${S.autoNext ? 'checked' : ''}></label>
+    <p class="hint" style="margin:8px 0 4px">クリアしたあと</p>
+    <div class="row">${[['next', '次の階へ すすむ'], ['repeat', '同じ階を 周回'], ['camp', '拠点へ もどる']].map(([k, n]) => `<button class="btn sm ${clearMode() === k ? 'primary' : ''}" data-act="clearMode" data-k="${k}">${n}</button>`).join('')}</div>
+    ${S.repeatFloor ? '<p class="hint">同じ階を くりかえし 戦う（ボスの 装備あつめに）。撤退ボタンで 止まる。</p>' : ''}
     ${unlocked('autoDive') ? `<label class="toggle"><span>全滅したら 10階 手前から 自動で 出撃しなおす（自動 深層ぬけ）</span><input type="checkbox" data-act="autoDive" ${S.autoDive ? 'checked' : ''}></label>` : ''}
     <div class="row" style="align-items:center;gap:10px"><button class="btn sm" data-act="manualSave">いま セーブする</button><span class="hint">最後の セーブ：${lastSaveText()}</span></div>
     ${abyssPanel()}
@@ -4541,8 +4546,10 @@ $('#spdBtn').addEventListener('click', () => {
   if (maxSpeed() === 1) callout('町の「施設」で 時計塔を 広げると 速くできる');
   updSpdBtn(); save();
 });
-function updNextBtn(){ $('#nextBtn').textContent = `次の階層へ自動: ${S.autoNext ? 'ON' : 'OFF'}`; }
-$('#nextBtn').addEventListener('click', () => { S.autoNext = !S.autoNext; updNextBtn(); save(); });
+const clearMode = () => S.repeatFloor ? 'repeat' : S.autoNext ? 'next' : 'camp';
+function setClearMode(m){ S.repeatFloor = m === 'repeat'; S.autoNext = m === 'next'; }
+function updNextBtn(){ $('#nextBtn').textContent = `クリア後: ${{next:'次の階へ', repeat:'同じ階を周回', camp:'拠点へ'}[clearMode()]}`; }
+$('#nextBtn').addEventListener('click', () => { setClearMode({next:'repeat', repeat:'camp', camp:'next'}[clearMode()]); updNextBtn(); save(); });
 let retT = null;
 $('#retBtn').addEventListener('click', () => {
   const b = $('#retBtn');
@@ -4704,6 +4711,7 @@ $('#panel').addEventListener('click', e => {
     case 'saveIn': openSaveIn(); return;
     case 'helpReset': S.seenHelp = {}; save(); toast('各画面を ひらくと 説明が もう一度 出る'); break;
     case 'town': TOWN = b.dataset.k; se('ui'); break;
+    case 'clearMode': setClearMode(b.dataset.k); updNextBtn(); se('ui'); save(); break;
     case 'allyP': ALLYP = b.dataset.k; selAlly = null; se('ui'); $('#panel').scrollTop = 0; break;
     case 'facUp': {
       const k = b.dataset.k, l = facLv(k); if (l >= FAC[k].max) break;
